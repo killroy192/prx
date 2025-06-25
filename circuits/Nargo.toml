@@ -1,0 +1,7 @@
+[package]
+authors = ["Dzmitry Lahunouski <killroy192@gmail.com>"]
+entry = "src/main.nr"
+name = "circuits"
+type = "bin"
+
+[dependencies]
