@@ -1,7 +1,8 @@
 [package]
 authors = ["Dzmitry Lahunouski <killroy192@gmail.com>"]
-entry = "src/main.nr"
-name = "circuits"
+entry = "basic.nr"
+name = "basic"
 type = "bin"
 
 [dependencies]
+notEqual = { path = "../libs/notEqual" }

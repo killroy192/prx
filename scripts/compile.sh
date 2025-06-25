@@ -1,16 +1,16 @@
 #!/bin/bash
 
-cd circuits
+cd circuits/basic
 
 nargo compile
 
 # Generate the verification key. You need to pass the `--oracle_hash keccak` flag when generating vkey and proving
 # to instruct bb to use keccak as the hash function, which is more optimal in Solidity
-bb write_vk -b ./target/circuits.json -o ./target --oracle_hash keccak
+bb write_vk -b ./target/basic.json -o ./target --oracle_hash keccak
 
 # Generate the Solidity verifier from the vkey
-bb write_solidity_verifier -k ./target/vk -o ../contracts/Verifier.sol
+bb write_solidity_verifier -k ./target/vk -o ../../contracts/Verifier.sol
 
-cd ../
+cd ../../
 
 npx hardhat compile

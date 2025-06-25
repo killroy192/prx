@@ -16,6 +16,10 @@ contracts/out/
 contracts/cache_forge/
 contracts/cache_solc/
 
+# Hardhat build artifacts
+cache/
+artifacts/
+
 # TypeScript build artifacts
 dist/
 *.tsbuildinfo
