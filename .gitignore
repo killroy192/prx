@@ -19,6 +19,7 @@ contracts/cache_solc/
 # Hardhat build artifacts
 cache/
 artifacts/
+typechain-types/
 
 # TypeScript build artifacts
 dist/
