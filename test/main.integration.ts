@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import circuit from "../circuits/basic/target/basic.json";
+import circuit from "../circuits/deposit/target/deposit.json";
 import { buildPoseidon } from "circomlibjs";
 
 const poseidon_ = buildPoseidon();
@@ -29,7 +29,7 @@ describe("Verifier Integration Tests", function () {
         backend = new UltraHonkBackend(circuit.bytecode);
 
         // Deploy the verifier contract
-        const Verifier = await ethers.getContractFactory("BasicVerifier");
+        const Verifier = await ethers.getContractFactory("DepositVerifier");
         verifier = await Verifier.deploy();
         await verifier.waitForDeployment();
     });
@@ -68,19 +68,18 @@ describe("Verifier Integration Tests", function () {
                     BigInt(input.total_amount) + amount
                 ).toString();
             }
-
+            const start = performance.now();
             const { witness } = await noir.execute(input);
 
             // Generate proof
             console.log("Generating proof... ⏳");
-            const start = performance.now();
             const { proof, publicInputs } = await backend.generateProof(
                 witness,
                 {
                     keccak: true,
                 }
             );
-            console.log(`Proving time: ${performance.now() - start}`);
+            console.log(`witness + proving time: ${performance.now() - start}`);
             // Verify proof locally first
             console.log("Verifying proof locally... ⌛");
             const isValidLocal = await backend.verifyProof(

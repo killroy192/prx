@@ -3,3 +3,5 @@
 /* eslint-disable */
 import type * as basic from "./basic";
 export type { basic };
+import type * as deposit from "./deposit";
+export type { deposit };

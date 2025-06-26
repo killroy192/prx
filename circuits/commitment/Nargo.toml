@@ -1,8 +1,8 @@
 [package]
-name = "basic"
-type = "bin"
 authors = ["Dzmitry Lahunouski <killroy192@gmail.com>"]
 compiler_version = ">=0.35.0"
+name = "commitment"
+type = "lib"
 
 [dependencies]
-poseidon = { tag = "v0.1.0", git = "https://github.com/noir-lang/poseidon" }
+poseidon = {tag = "v0.1.0", git = "https://github.com/noir-lang/poseidon"}

@@ -26,10 +26,41 @@ declare module "hardhat/types/runtime" {
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.IVerifier__factory>;
     getContractFactory(
+      name: "BaseHonkVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.BaseHonkVerifier__factory>;
+    getContractFactory(
+      name: "HonkVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.HonkVerifier__factory>;
+    getContractFactory(
+      name: "IVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.IVerifier__factory>;
+    getContractFactory(
       name: "BasicVerifier",
       signerOrOptions?: ethers.Signer | FactoryOptions
     ): Promise<Contracts.BasicVerifier__factory>;
+    getContractFactory(
+      name: "DepositVerifier",
+      signerOrOptions?: ethers.Signer | FactoryOptions
+    ): Promise<Contracts.DepositVerifier__factory>;
 
+    getContractAt(
+      name: "BaseHonkVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.BaseHonkVerifier>;
+    getContractAt(
+      name: "HonkVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.HonkVerifier>;
+    getContractAt(
+      name: "IVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.IVerifier>;
     getContractAt(
       name: "BaseHonkVerifier",
       address: string | ethers.Addressable,
@@ -50,7 +81,24 @@ declare module "hardhat/types/runtime" {
       address: string | ethers.Addressable,
       signer?: ethers.Signer
     ): Promise<Contracts.BasicVerifier>;
+    getContractAt(
+      name: "DepositVerifier",
+      address: string | ethers.Addressable,
+      signer?: ethers.Signer
+    ): Promise<Contracts.DepositVerifier>;
 
+    deployContract(
+      name: "BaseHonkVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.BaseHonkVerifier>;
+    deployContract(
+      name: "HonkVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.HonkVerifier>;
+    deployContract(
+      name: "IVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IVerifier>;
     deployContract(
       name: "BaseHonkVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
@@ -67,7 +115,26 @@ declare module "hardhat/types/runtime" {
       name: "BasicVerifier",
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BasicVerifier>;
+    deployContract(
+      name: "DepositVerifier",
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DepositVerifier>;
 
+    deployContract(
+      name: "BaseHonkVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.BaseHonkVerifier>;
+    deployContract(
+      name: "HonkVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.HonkVerifier>;
+    deployContract(
+      name: "IVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.IVerifier>;
     deployContract(
       name: "BaseHonkVerifier",
       args: any[],
@@ -88,6 +155,11 @@ declare module "hardhat/types/runtime" {
       args: any[],
       signerOrOptions?: ethers.Signer | DeployContractOptions
     ): Promise<Contracts.BasicVerifier>;
+    deployContract(
+      name: "DepositVerifier",
+      args: any[],
+      signerOrOptions?: ethers.Signer | DeployContractOptions
+    ): Promise<Contracts.DepositVerifier>;
 
     // default types
     getContractFactory(

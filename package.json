@@ -5,7 +5,7 @@
     "main": "index.js",
     "scripts": {
         "test": "npx hardhat test",
-        "compile": "bash scripts/compile.sh"
+        "deposit:compile": "bash scripts/compile.sh deposit"
     },
     "keywords": [
         "noir",

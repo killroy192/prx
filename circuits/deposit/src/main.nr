@@ -1,19 +1,8 @@
-// Import the Poseidon hash function for 2-field input on BN254:
-use poseidon::poseidon::bn254::hash_2;
-
-struct Commitment {
-    amount: Field,
-    entropy: Field,
-}
+use commitment::{Commitment, verifyHashAndComputeSum};
 
 fn main(commitments: [Commitment; 3], hashes: pub [Field; 3], total_amount: pub Field) {
     let mut sum: Field = 0;
-    for i in 0..3 {
-        let commitment: Commitment = commitments[i];
-        let computed = hash_2([commitment.amount, commitment.entropy]);
-        assert_eq(computed, hashes[i]);
-        sum = sum + commitment.amount;
-    }
+    verifyHashAndComputeSum(commitments, hashes, &mut sum);
     assert_eq(sum, total_amount);
 }
 

@@ -12,5 +12,7 @@ export type { HonkVerifier } from "./circuits/basic/target/HonkVerifier.sol/Honk
 export { HonkVerifier__factory } from "./factories/circuits/basic/target/HonkVerifier.sol/HonkVerifier__factory";
 export type { IVerifier } from "./circuits/basic/target/HonkVerifier.sol/IVerifier";
 export { IVerifier__factory } from "./factories/circuits/basic/target/HonkVerifier.sol/IVerifier__factory";
-export type { BasicVerifier } from "./contracts/BasicVerifier";
-export { BasicVerifier__factory } from "./factories/contracts/BasicVerifier__factory";
+export type { BasicVerifier } from "./contracts/BasicVerifier.test.sol/BasicVerifier";
+export { BasicVerifier__factory } from "./factories/contracts/BasicVerifier.test.sol/BasicVerifier__factory";
+export type { DepositVerifier } from "./contracts/DepositVerifier";
+export { DepositVerifier__factory } from "./factories/contracts/DepositVerifier__factory";
