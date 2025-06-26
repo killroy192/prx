@@ -9,8 +9,6 @@ nargo compile
 bb write_vk -b ./target/basic.json -o ./target --oracle_hash keccak
 
 # Generate the Solidity verifier from the vkey
-bb write_solidity_verifier -k ./target/vk -o ../../contracts/Verifier.sol
+bb write_solidity_verifier -k ./target/vk -o ./target/HonkVerifier.sol
 
 cd ../../
-
-npx hardhat compile

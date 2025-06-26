@@ -17,24 +17,26 @@ import type {
   TypedEventLog,
   TypedListener,
   TypedContractMethod,
-} from "./common";
+} from "../common";
 
-export interface HonkVerifierInterface extends Interface {
-  getFunction(nameOrSignature: "verify"): FunctionFragment;
+export interface BasicVerifierInterface extends Interface {
+  getFunction(nameOrSignature: "verifier" | "verify"): FunctionFragment;
 
+  encodeFunctionData(functionFragment: "verifier", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "verify",
     values: [BytesLike, BytesLike[]]
   ): string;
 
+  decodeFunctionResult(functionFragment: "verifier", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "verify", data: BytesLike): Result;
 }
 
-export interface HonkVerifier extends BaseContract {
-  connect(runner?: ContractRunner | null): HonkVerifier;
+export interface BasicVerifier extends BaseContract {
+  connect(runner?: ContractRunner | null): BasicVerifier;
   waitForDeployment(): Promise<this>;
 
-  interface: HonkVerifierInterface;
+  interface: BasicVerifierInterface;
 
   queryFilter<TCEvent extends TypedContractEvent>(
     event: TCEvent,
@@ -73,6 +75,8 @@ export interface HonkVerifier extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
+  verifier: TypedContractMethod<[], [string], "view">;
+
   verify: TypedContractMethod<
     [proof: BytesLike, publicInputs: BytesLike[]],
     [boolean],
@@ -83,6 +87,9 @@ export interface HonkVerifier extends BaseContract {
     key: string | FunctionFragment
   ): T;
 
+  getFunction(
+    nameOrSignature: "verifier"
+  ): TypedContractMethod<[], [string], "view">;
   getFunction(
     nameOrSignature: "verify"
   ): TypedContractMethod<

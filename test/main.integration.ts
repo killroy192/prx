@@ -3,6 +3,20 @@ import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
 import circuit from "../circuits/basic/target/basic.json";
+import { buildPoseidon } from "circomlibjs";
+
+const poseidon_ = buildPoseidon();
+
+async function getHash({
+    amount,
+    entropy,
+}: {
+    amount: string;
+    entropy: string;
+}) {
+    const poseidon = await poseidon_;
+    return poseidon.F.toString(poseidon([BigInt(amount), BigInt(entropy)]));
+}
 
 describe("Verifier Integration Tests", function () {
     let verifier: any;
@@ -15,27 +29,66 @@ describe("Verifier Integration Tests", function () {
         backend = new UltraHonkBackend(circuit.bytecode);
 
         // Deploy the verifier contract
-        const Verifier = await ethers.getContractFactory("HonkVerifier");
+        const Verifier = await ethers.getContractFactory("BasicVerifier");
         verifier = await Verifier.deploy();
         await verifier.waitForDeployment();
     });
 
     describe("Basic Circuit Verification", function () {
-        it("should verify a valid proof for x=1, y=2", async function () {
-            // Generate witness for x=1 (private input only)
-            // y=2 is the public input that will be passed to the verifier
-            const { witness } = await noir.execute({ x: 1, y: 2 });
+        it("valid case", async function () {
+            const input = {
+                commitments: [
+                    {
+                        amount: "",
+                        entropy:
+                            "0x123456789012345678901234567890123456789012345678901234567890123",
+                    },
+                    {
+                        amount: "",
+                        entropy:
+                            "0x345678901234567890123456789012345678901234567890123456789012345",
+                    },
+                    {
+                        amount: "",
+                        entropy:
+                            "0x456789012345678901234567890123456789012345678901234567890123456",
+                    },
+                ],
+                total_amount: "",
+                hashes: ["", "", ""],
+            };
+
+            for (let i = 0; i < 3; i++) {
+                const amount =
+                    BigInt(Math.ceil(Math.random() * 1000)) *
+                    1962032335615093305919915752779923492862405119078726351644279745651970028n;
+                input.commitments[i].amount = amount.toString();
+                input.hashes[i] = await getHash(input.commitments[i]);
+                input.total_amount = (
+                    BigInt(input.total_amount) + amount
+                ).toString();
+            }
+
+            const { witness } = await noir.execute(input);
 
             // Generate proof
             console.log("Generating proof... ⏳");
-            const proof = await backend.generateProof(witness);
-            console.log("Generated proof... ✅");
-            console.log("Proof length:", proof.proof.length, "bytes");
-            console.log("Expected length:", 440 * 32, "bytes");
-
+            const start = performance.now();
+            const { proof, publicInputs } = await backend.generateProof(
+                witness,
+                {
+                    keccak: true,
+                }
+            );
+            console.log(`Proving time: ${performance.now() - start}`);
             // Verify proof locally first
             console.log("Verifying proof locally... ⌛");
-            const isValidLocal = await backend.verifyProof(proof);
+            const isValidLocal = await backend.verifyProof(
+                { proof, publicInputs },
+                {
+                    keccak: true,
+                }
+            );
             console.log(
                 `Local verification: ${
                     isValidLocal ? "valid" : "invalid"
@@ -47,8 +100,8 @@ describe("Verifier Integration Tests", function () {
             console.log("Verifying proof on-chain... ⌛");
             try {
                 const isValidOnChain = await verifier.verify(
-                    proof.proof,
-                    proof.publicInputs
+                    proof,
+                    publicInputs
                 );
                 console.log(
                     `On-chain verification: ${
