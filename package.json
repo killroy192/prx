@@ -5,7 +5,8 @@
     "main": "index.js",
     "scripts": {
         "test": "npx hardhat test",
-        "deposit:compile": "bash scripts/compile.sh deposit"
+        "compile": "bash utils/compile.sh",
+        "comt": "ts-node utils/commitment.ts 40"
     },
     "keywords": [
         "noir",

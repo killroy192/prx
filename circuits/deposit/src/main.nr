@@ -1,8 +1,8 @@
-use commitment::{Commitment, verifyHashAndComputeSum};
+use commitment::{Commitment, verifyHashAndComputeSum_3};
 
 fn main(commitments: [Commitment; 3], hashes: pub [Field; 3], total_amount: pub Field) {
     let mut sum: Field = 0;
-    verifyHashAndComputeSum(commitments, hashes, &mut sum);
+    verifyHashAndComputeSum_3(commitments, hashes, &mut sum);
     assert_eq(sum, total_amount);
 }
 

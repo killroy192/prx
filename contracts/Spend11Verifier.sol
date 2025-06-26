@@ -2,9 +2,9 @@
 // Copyright 2022 Aztec
 pragma solidity >=0.8.21;
 
-import {HonkVerifier} from "../circuits/deposit/target/HonkVerifier_deposit.sol";
+import {HonkVerifier} from "../circuits/spend_11/target/HonkVerifier_spend_11.sol";
 
-contract DepositVerifier {
+contract Spend11Verifier {
     HonkVerifier public verifier = new HonkVerifier();
 
     function verify(bytes calldata proof, bytes32[] calldata publicInputs) external view returns (bool) {

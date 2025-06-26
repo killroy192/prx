@@ -7,9 +7,7 @@ const config: HardhatUserConfig = {
         settings: { optimizer: { enabled: true, runs: 100000000 } },
     },
     networks: {
-        hardhat: {
-            allowUnlimitedContractSize: true,
-        },
+        hardhat: {},
     },
 };
 
