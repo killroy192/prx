@@ -2,10 +2,10 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import circuit from "../circuits/spend_11/target/spend_11.json";
-import { computePoseidon } from "../utils/poseidon";
+import circuit from "../../circuits/spend_11/target/spend_11.json";
+import { computePoseidon } from "../../utils/poseidon";
 
-describe("Spend 11 Integration Tests", function () {
+describe("Spend 11 Circuit Integration Tests", function () {
     let verifier: any;
     let noir: Noir;
     let backend: UltraHonkBackend;

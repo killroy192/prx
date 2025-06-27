@@ -2,10 +2,10 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import circuit from "../circuits/deposit/target/deposit.json";
-import { computePoseidon } from "../utils/poseidon";
+import circuit from "../../circuits/deposit/target/deposit.json";
+import { computePoseidon } from "../../utils/poseidon";
 
-describe("Deposit Integration Tests", function () {
+describe("Deposit Circuit Integration Tests", function () {
     let verifier: any;
     let noir: Noir;
     let backend: UltraHonkBackend;

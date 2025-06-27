@@ -2,14 +2,14 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import circuit from "../circuits/spend_44/target/spend_44.json";
-import { computePoseidon } from "../utils/poseidon";
+import circuit from "../../circuits/spend_44/target/spend_44.json";
+import { computePoseidon } from "../../utils/poseidon";
 
 const cloneInList = (size: number, data: object) => {
     return Array.from({ length: size }).fill(data);
 };
 
-describe("Spend 44 Integration Tests", function () {
+describe("Spend 44 Circuit Integration Tests", function () {
     let verifier: any;
     let noir: Noir;
     let backend: UltraHonkBackend;

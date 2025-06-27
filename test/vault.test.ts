@@ -1,619 +1,248 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
-import {
-    Vault,
-    MockERC20,
-    DepositVerifier,
-    PoseidonWrapper,
-} from "../typechain-types";
-import { UltraHonkBackend } from "@aztec/bb.js";
-import { Noir } from "@noir-lang/noir_js";
-import circuit from "../circuits/deposit/target/deposit.json";
+import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
 
-describe("Vault", function () {
-    let vault: Vault;
-    let mockToken: MockERC20;
-    let depositVerifier: DepositVerifier;
-    let poseidonWrapper: PoseidonWrapper;
-    let owner: any;
-    let user1: any;
-    let user2: any;
-    let user3: any;
-    let noir: Noir;
-    let backend: UltraHonkBackend;
+describe("Vault - Integration", function () {
+    it("Should successfully deposit and withdraw in sequence", async function () {
+        const { vault, mockToken, user1, user2, user3, noir, backend } =
+            await useDeploymentFixture();
 
-    beforeEach(async function () {
-        [owner, user1, user2, user3] = await ethers.getSigners();
+        // Create a commitment for testing
+        const commitment = {
+            amount: "1000000000000000000", // 1 token
+            entropy:
+                "123456789012345678901234567890123456789012345678901234567890123",
+        };
 
-        // Initialize Noir and backend
-        noir = new Noir(circuit as any);
-        backend = new UltraHonkBackend(circuit.bytecode);
+        const totalAmount = "1000000000000000000";
 
-        // Deploy DepositVerifier
-        const DepositVerifierFactory = await ethers.getContractFactory(
-            "DepositVerifier"
-        );
-        depositVerifier = await DepositVerifierFactory.deploy();
+        // Create zero-amount commitments
+        const zeroCommitment1 = {
+            amount: "0",
+            entropy:
+                "111111111111111111111111111111111111111111111111111111111111111",
+        };
+        const zeroCommitment2 = {
+            amount: "0",
+            entropy:
+                "222222222222222222222222222222222222222222222222222222222222222",
+        };
 
-        // Deploy PoseidonT3 library
-        const PoseidonT3Factory = await ethers.getContractFactory("PoseidonT3");
-        const poseidonT3 = await PoseidonT3Factory.deploy();
+        // Compute poseidon hashes for all commitments
+        const hash = await computePoseidon(commitment);
+        const hash1 = await computePoseidon(zeroCommitment1);
+        const hash2 = await computePoseidon(zeroCommitment2);
 
-        // Link PoseidonT3 when deploying PoseidonWrapper
-        const PoseidonWrapperFactory = await ethers.getContractFactory(
-            "PoseidonWrapper",
-            {
-                libraries: {
-                    PoseidonT3: poseidonT3.target,
-                },
-            }
-        );
-        poseidonWrapper = await PoseidonWrapperFactory.deploy();
+        const input = {
+            commitments: [commitment, zeroCommitment1, zeroCommitment2],
+            hashes: [hash, hash1, hash2],
+            total_amount: totalAmount,
+        };
 
-        // Deploy mock ERC20 token
-        const MockERC20Factory = await ethers.getContractFactory("MockERC20");
-        mockToken = await MockERC20Factory.deploy("Mock Token", "MTK");
-
-        // Deploy Vault contract
-        const VaultFactory = await ethers.getContractFactory("Vault");
-        vault = await VaultFactory.deploy(
-            depositVerifier.target,
-            poseidonWrapper.target
-        );
-
-        // Mint some tokens to users
-        await mockToken.mint(user1.address, ethers.parseEther("1000"));
-        await mockToken.mint(user2.address, ethers.parseEther("1000"));
-        await mockToken.mint(user3.address, ethers.parseEther("1000"));
-    });
-
-    describe("Deposit", function () {
-        it("Should successfully deposit with valid ZK proof using current contract logic", async function () {
-            // Create commitments with amounts and entropy
-            const commitments = [
-                {
-                    amount: "1000000000000000000", // 1 token
-                    entropy:
-                        "0x123456789012345678901234567890123456789012345678901234567890123",
-                },
-                {
-                    amount: "2000000000000000000", // 2 tokens
-                    entropy:
-                        "0x345678901234567890123456789012345678901234567890123456789012345",
-                },
-                {
-                    amount: "3000000000000000000", // 3 tokens
-                    entropy:
-                        "0x456789012345678901234567890123456789012345678901234567890123456",
-                },
-            ];
-
-            const totalAmount = "6000000000000000000"; // 6 tokens total
-
-            // Compute poseidon hashes for each commitment
-            const hashes = [];
-            for (let i = 0; i < 3; i++) {
-                hashes.push(await computePoseidon(commitments[i]));
-            }
-
-            // Create the input for the circuit
-            const input = {
-                commitments: commitments,
-                hashes: hashes,
-                total_amount: totalAmount,
-            };
-
-            // Generate the proof
-            const { witness } = await noir.execute(input);
-            const { proof, publicInputs } = await backend.generateProof(
-                witness,
-                {
-                    keccak: true,
-                }
-            );
-
-            // Verify the proof locally first
-            const isValidLocal = await backend.verifyProof(
-                { proof, publicInputs },
-                { keccak: true }
-            );
-            expect(isValidLocal).to.be.true;
-
-            // Now test with the contract - this should fail if my analysis is correct
-            const depositCommitmentParams: [any, any, any] = [
-                {
-                    poseidonHash: hashes[0],
-                    owner: user1.address,
-                },
-                {
-                    poseidonHash: hashes[1],
-                    owner: user2.address,
-                },
-                {
-                    poseidonHash: hashes[2],
-                    owner: user3.address,
-                },
-            ];
-
-            // Approve tokens
-            await mockToken
-                .connect(user1)
-                .approve(vault.target, BigInt(totalAmount));
-
-            // This should fail if the contract's public inputs don't match the circuit expectations
-            await vault
-                .connect(user1)
-                .deposit(
-                    mockToken.target,
-                    BigInt(totalAmount),
-                    depositCommitmentParams,
-                    proof
-                );
-
-            // If we get here, my analysis was wrong
-            console.log("Test passed - contract logic is correct!");
+        const { witness } = await noir.execute(input);
+        const { proof } = await backend.generateProof(witness, {
+            keccak: true,
         });
 
-        it("Should compute Poseidon hash on-chain correctly", async function () {
-            const amount = "1000000000000000000"; // 1 token
-            const entropy =
-                "0x123456789012345678901234567890123456789012345678901234567890123";
+        const depositCommitmentParams: [any, any, any] = [
+            { poseidonHash: hash, owner: user1.address },
+            { poseidonHash: hash1, owner: user2.address },
+            { poseidonHash: hash2, owner: user3.address },
+        ];
 
-            // Compute hash off-chain
-            const offChainHash = await computePoseidon({ amount, entropy });
-
-            // Compute hash on-chain
-            const onChainHash = await vault.computePoseidonHash(
-                BigInt(amount),
-                BigInt(entropy)
-            );
-
-            // They should match
-            expect(onChainHash.toString()).to.equal(offChainHash);
-        });
-
-        it("Should successfully withdraw a commitment", async function () {
-            // Create a commitment for withdrawal testing
-            const commitment = {
-                amount: "5000000000000000000", // 5 tokens
-                entropy:
-                    "123456789012345678901234567890123456789012345678901234567890123",
-            };
-
-            const totalAmount = "5000000000000000000"; // 5 tokens total
-
-            // Create zero-amount commitments
-            const zeroCommitment1 = {
-                amount: "0",
-                entropy:
-                    "345678901234567890123456789012345678901234567890123456789012345",
-            };
-            const zeroCommitment2 = {
-                amount: "0",
-                entropy:
-                    "456789012345678901234567890123456789012345678901234567890123456",
-            };
-
-            // Compute poseidon hashes for all commitments
-            const hash = await computePoseidon(commitment);
-            const hash1 = await computePoseidon(zeroCommitment1);
-            const hash2 = await computePoseidon(zeroCommitment2);
-
-            // Create the input for the circuit
-            const input = {
-                commitments: [commitment, zeroCommitment1, zeroCommitment2],
-                hashes: [hash, hash1, hash2],
-                total_amount: totalAmount,
-            };
-
-            // Generate the proof
-            const { witness } = await noir.execute(input);
-            const { proof } = await backend.generateProof(witness, {
-                keccak: true,
-            });
-
-            const depositCommitmentParams: [any, any, any] = [
-                {
-                    poseidonHash: hash,
-                    owner: user1.address,
-                },
-                {
-                    poseidonHash: hash1,
-                    owner: user2.address,
-                },
-                {
-                    poseidonHash: hash2,
-                    owner: user3.address,
-                },
-            ];
-
-            // Deposit tokens
-            await mockToken
-                .connect(user1)
-                .approve(vault.target, BigInt(totalAmount));
-            await vault
-                .connect(user1)
-                .deposit(
-                    mockToken.target,
-                    BigInt(totalAmount),
-                    depositCommitmentParams,
-                    proof
-                );
-
-            // Check initial balances
-            const initialVaultBalance = await mockToken.balanceOf(vault.target);
-            const initialUserBalance = await mockToken.balanceOf(user1.address);
-
-            // Withdraw the commitment
-            await vault
-                .connect(user1)
-                .withdraw(
-                    mockToken.target,
-                    BigInt(commitment.amount),
-                    BigInt(commitment.entropy)
-                );
-
-            // Check final balances
-            const finalVaultBalance = await mockToken.balanceOf(vault.target);
-            const finalUserBalance = await mockToken.balanceOf(user1.address);
-
-            // Verify balances
-            expect(finalVaultBalance).to.equal(
-                initialVaultBalance - BigInt(commitment.amount)
-            );
-            expect(finalUserBalance).to.equal(
-                initialUserBalance + BigInt(commitment.amount)
-            );
-
-            // Verify commitment is deleted from storage
-            const [owner, spent] = await vault.getCommitment(
+        // Deposit tokens
+        await mockToken
+            .connect(user1)
+            .approve(vault.target, BigInt(totalAmount));
+        await vault
+            .connect(user1)
+            .deposit(
                 mockToken.target,
-                hash
+                BigInt(totalAmount),
+                depositCommitmentParams,
+                proof
             );
-            expect(owner).to.equal(ethers.ZeroAddress);
-            expect(spent).to.equal(false); // Default value for non-existent commitment
-        });
 
-        it("Should revert withdrawal by unauthorized address", async function () {
-            // Create and deposit a commitment
-            const commitment = {
-                amount: "3000000000000000000", // 3 tokens
-                entropy:
-                    "987654321098765432109876543210987654321098765432109876543210987",
-            };
+        // Verify deposit was successful
+        const [owner, spent] = await vault.getCommitment(
+            mockToken.target,
+            hash
+        );
+        expect(owner).to.equal(user1.address);
+        expect(spent).to.equal(false);
 
-            const totalAmount = "3000000000000000000";
+        // Withdraw the commitment
+        const initialUserBalance = await mockToken.balanceOf(user1.address);
+        await vault
+            .connect(user1)
+            .withdraw(
+                mockToken.target,
+                BigInt(commitment.amount),
+                BigInt(commitment.entropy)
+            );
 
-            // Create zero-amount commitments
-            const zeroCommitment1 = {
-                amount: "0",
-                entropy:
-                    "111111111111111111111111111111111111111111111111111111111111111",
-            };
-            const zeroCommitment2 = {
-                amount: "0",
-                entropy:
-                    "222222222222222222222222222222222222222222222222222222222222222",
-            };
+        // Verify withdrawal was successful
+        const finalUserBalance = await mockToken.balanceOf(user1.address);
+        expect(finalUserBalance).to.equal(
+            initialUserBalance + BigInt(commitment.amount)
+        );
 
-            // Compute poseidon hashes for all commitments
-            const hash = await computePoseidon(commitment);
-            const hash1 = await computePoseidon(zeroCommitment1);
-            const hash2 = await computePoseidon(zeroCommitment2);
-
-            const input = {
-                commitments: [commitment, zeroCommitment1, zeroCommitment2],
-                hashes: [hash, hash1, hash2],
-                total_amount: totalAmount,
-            };
-
-            const { witness } = await noir.execute(input);
-            const { proof } = await backend.generateProof(witness, {
-                keccak: true,
-            });
-
-            const depositCommitmentParams: [any, any, any] = [
-                { poseidonHash: hash, owner: user1.address },
-                { poseidonHash: hash1, owner: user2.address },
-                { poseidonHash: hash2, owner: user3.address },
-            ];
-
-            await mockToken
-                .connect(user1)
-                .approve(vault.target, BigInt(totalAmount));
-            await vault
-                .connect(user1)
-                .deposit(
-                    mockToken.target,
-                    BigInt(totalAmount),
-                    depositCommitmentParams,
-                    proof
-                );
-
-            // Try to withdraw with wrong address
-            await expect(
-                vault
-                    .connect(user2)
-                    .withdraw(
-                        mockToken.target,
-                        BigInt(commitment.amount),
-                        BigInt(commitment.entropy)
-                    )
-            ).to.be.revertedWith("Vault: Only assigned address can withdraw");
-        });
-
-        it("Should revert withdrawal of non-existent commitment", async function () {
-            const fakeAmount = "1000000000000000000";
-            const fakeEntropy =
-                "123456789012345678901234567890123456789012345678901234567890123";
-
-            await expect(
-                vault
-                    .connect(user1)
-                    .withdraw(
-                        mockToken.target,
-                        BigInt(fakeAmount),
-                        BigInt(fakeEntropy)
-                    )
-            ).to.be.revertedWith("Vault: Commitment not found");
-        });
-
-        it("Should revert withdrawal with zero amount", async function () {
-            await expect(
-                vault
-                    .connect(user1)
-                    .withdraw(
-                        mockToken.target,
-                        0,
-                        BigInt(
-                            "123456789012345678901234567890123456789012345678901234567890123"
-                        )
-                    )
-            ).to.be.revertedWith("Vault: Amount must be greater than 0");
-        });
-
-        it("Should revert withdrawal with invalid token address", async function () {
-            await expect(
-                vault
-                    .connect(user1)
-                    .withdraw(
-                        ethers.ZeroAddress,
-                        BigInt("1000000000000000000"),
-                        BigInt(
-                            "123456789012345678901234567890123456789012345678901234567890123"
-                        )
-                    )
-            ).to.be.revertedWith("Vault: Invalid token address");
-        });
-
-        it("Should prevent double withdrawal of the same commitment", async function () {
-            // Create and deposit a commitment
-            const commitment = {
-                amount: "2000000000000000000", // 2 tokens
-                entropy:
-                    "123456789012345678901234567890123456789012345678901234567890123",
-            };
-
-            const totalAmount = "2000000000000000000";
-
-            // Create zero-amount commitments
-            const zeroCommitment1 = {
-                amount: "0",
-                entropy:
-                    "111111111111111111111111111111111111111111111111111111111111111",
-            };
-            const zeroCommitment2 = {
-                amount: "0",
-                entropy:
-                    "222222222222222222222222222222222222222222222222222222222222222",
-            };
-
-            // Compute poseidon hashes for all commitments
-            const hash = await computePoseidon(commitment);
-            const hash1 = await computePoseidon(zeroCommitment1);
-            const hash2 = await computePoseidon(zeroCommitment2);
-
-            const input = {
-                commitments: [commitment, zeroCommitment1, zeroCommitment2],
-                hashes: [hash, hash1, hash2],
-                total_amount: totalAmount,
-            };
-
-            const { witness } = await noir.execute(input);
-            const { proof } = await backend.generateProof(witness, {
-                keccak: true,
-            });
-
-            const depositCommitmentParams: [any, any, any] = [
-                { poseidonHash: hash, owner: user1.address },
-                { poseidonHash: hash1, owner: user2.address },
-                { poseidonHash: hash2, owner: user3.address },
-            ];
-
-            await mockToken
-                .connect(user1)
-                .approve(vault.target, BigInt(totalAmount));
-            await vault
-                .connect(user1)
-                .deposit(
-                    mockToken.target,
-                    BigInt(totalAmount),
-                    depositCommitmentParams,
-                    proof
-                );
-
-            // First withdrawal should succeed
-            await vault
-                .connect(user1)
-                .withdraw(
-                    mockToken.target,
-                    BigInt(commitment.amount),
-                    BigInt(commitment.entropy)
-                );
-
-            // Second withdrawal should fail (commitment deleted)
-            await expect(
-                vault
-                    .connect(user1)
-                    .withdraw(
-                        mockToken.target,
-                        BigInt(commitment.amount),
-                        BigInt(commitment.entropy)
-                    )
-            ).to.be.revertedWith("Vault: Commitment not found");
-        });
+        // Verify commitment is deleted
+        const [ownerAfter, spentAfter] = await vault.getCommitment(
+            mockToken.target,
+            hash
+        );
+        expect(ownerAfter).to.equal(ethers.ZeroAddress);
+        expect(spentAfter).to.equal(false);
     });
 
-    describe("Emergency Withdraw", function () {
-        it("Should allow owner to emergency withdraw all tokens", async function () {
-            // Create a simple deposit with ZK proof for testing
-            const commitments = [
-                {
-                    amount: "50000000000000000000", // 50 tokens
-                    entropy:
-                        "0x123456789012345678901234567890123456789012345678901234567890123",
-                },
-                {
-                    amount: "0",
-                    entropy:
-                        "0x345678901234567890123456789012345678901234567890123456789012345",
-                },
-                {
-                    amount: "0",
-                    entropy:
-                        "0x456789012345678901234567890123456789012345678901234567890123456",
-                },
-            ];
+    it("Should handle multiple deposits and withdrawals correctly", async function () {
+        const { vault, mockToken, user1, user2, user3, noir, backend } =
+            await useDeploymentFixture();
 
-            const totalAmount = "50000000000000000000"; // 50 tokens total
+        // First deposit
+        const commitment1 = {
+            amount: "5000000000000000000", // 5 tokens
+            entropy:
+                "111111111111111111111111111111111111111111111111111111111111111",
+        };
 
-            // Compute poseidon hashes for each commitment
-            const hashes = [];
-            for (let i = 0; i < 3; i++) {
-                hashes.push(await computePoseidon(commitments[i]));
-            }
+        const zeroCommitment1 = {
+            amount: "0",
+            entropy:
+                "222222222222222222222222222222222222222222222222222222222222222",
+        };
+        const zeroCommitment2 = {
+            amount: "0",
+            entropy:
+                "333333333333333333333333333333333333333333333333333333333333333",
+        };
 
-            // Create the input for the circuit
-            const input = {
-                commitments: commitments,
-                hashes: hashes,
-                total_amount: totalAmount,
-            };
+        const hash1 = await computePoseidon(commitment1);
+        const hashZero1 = await computePoseidon(zeroCommitment1);
+        const hashZero2 = await computePoseidon(zeroCommitment2);
 
-            // Generate the proof
-            const { witness } = await noir.execute(input);
-            const { proof } = await backend.generateProof(witness, {
-                keccak: true,
-            });
+        const input1 = {
+            commitments: [commitment1, zeroCommitment1, zeroCommitment2],
+            hashes: [hash1, hashZero1, hashZero2],
+            total_amount: commitment1.amount,
+        };
 
-            const depositCommitmentParams: [any, any, any] = [
-                {
-                    poseidonHash: hashes[0],
-                    owner: user1.address,
-                },
-                {
-                    poseidonHash: hashes[1],
-                    owner: user2.address,
-                },
-                {
-                    poseidonHash: hashes[2],
-                    owner: user3.address,
-                },
-            ];
-
-            // Deposit tokens from multiple users
-            const depositAmount = BigInt(totalAmount);
-            await mockToken.connect(user1).approve(vault.target, depositAmount);
-            await mockToken.connect(user2).approve(vault.target, depositAmount);
-
-            await vault
-                .connect(user1)
-                .deposit(
-                    mockToken.target,
-                    depositAmount,
-                    depositCommitmentParams,
-                    proof
-                );
-
-            // Create another deposit for user2
-            const commitments2 = [
-                {
-                    amount: "50000000000000000000", // 50 tokens
-                    entropy:
-                        "0x987654321098765432109876543210987654321098765432109876543210987",
-                },
-                {
-                    amount: "0",
-                    entropy:
-                        "0x876543210987654321098765432109876543210987654321098765432109876",
-                },
-                {
-                    amount: "0",
-                    entropy:
-                        "0x765432109876543210987654321098765432109876543210987654321098765",
-                },
-            ];
-
-            const hashes2 = [];
-            for (let i = 0; i < 3; i++) {
-                hashes2.push(await computePoseidon(commitments2[i]));
-            }
-
-            const input2 = {
-                commitments: commitments2,
-                hashes: hashes2,
-                total_amount: totalAmount,
-            };
-
-            const { witness: witness2 } = await noir.execute(input2);
-            const { proof: proof2 } = await backend.generateProof(witness2, {
-                keccak: true,
-            });
-
-            const depositCommitmentParams2: [any, any, any] = [
-                {
-                    poseidonHash: hashes2[0],
-                    owner: user2.address,
-                },
-                {
-                    poseidonHash: hashes2[1],
-                    owner: user1.address,
-                },
-                {
-                    poseidonHash: hashes2[2],
-                    owner: user3.address,
-                },
-            ];
-
-            await vault
-                .connect(user2)
-                .deposit(
-                    mockToken.target,
-                    depositAmount,
-                    depositCommitmentParams2,
-                    proof2
-                );
-
-            const initialOwnerBalance = await mockToken.balanceOf(
-                owner.address
-            );
-
-            await vault.connect(owner).emergencyWithdraw(mockToken.target);
-
-            const finalOwnerBalance = await mockToken.balanceOf(owner.address);
-            expect(finalOwnerBalance).to.equal(
-                initialOwnerBalance + BigInt(totalAmount) * 2n
-            );
+        const { witness: witness1 } = await noir.execute(input1);
+        const { proof: proof1 } = await backend.generateProof(witness1, {
+            keccak: true,
         });
 
-        it("Should revert if called by non-owner", async function () {
-            await expect(
-                vault.connect(user1).emergencyWithdraw(mockToken.target)
-            ).to.be.revertedWithCustomError(
-                vault,
-                "OwnableUnauthorizedAccount"
+        const depositParams1: [any, any, any] = [
+            { poseidonHash: hash1, owner: user1.address },
+            { poseidonHash: hashZero1, owner: user2.address },
+            { poseidonHash: hashZero2, owner: user3.address },
+        ];
+
+        await mockToken
+            .connect(user1)
+            .approve(vault.target, BigInt(commitment1.amount));
+        await vault
+            .connect(user1)
+            .deposit(
+                mockToken.target,
+                BigInt(commitment1.amount),
+                depositParams1,
+                proof1
             );
+
+        // Second deposit with different zero commitments
+        const commitment2 = {
+            amount: "3000000000000000000", // 3 tokens
+            entropy:
+                "444444444444444444444444444444444444444444444444444444444444444",
+        };
+
+        const zeroCommitment3 = {
+            amount: "0",
+            entropy:
+                "555555555555555555555555555555555555555555555555555555555555555",
+        };
+        const zeroCommitment4 = {
+            amount: "0",
+            entropy:
+                "666666666666666666666666666666666666666666666666666666666666666",
+        };
+
+        const hash2 = await computePoseidon(commitment2);
+        const hashZero3 = await computePoseidon(zeroCommitment3);
+        const hashZero4 = await computePoseidon(zeroCommitment4);
+
+        const input2 = {
+            commitments: [commitment2, zeroCommitment3, zeroCommitment4],
+            hashes: [hash2, hashZero3, hashZero4],
+            total_amount: commitment2.amount,
+        };
+
+        const { witness: witness2 } = await noir.execute(input2);
+        const { proof: proof2 } = await backend.generateProof(witness2, {
+            keccak: true,
         });
+
+        const depositParams2: [any, any, any] = [
+            { poseidonHash: hash2, owner: user2.address },
+            { poseidonHash: hashZero3, owner: user1.address },
+            { poseidonHash: hashZero4, owner: user3.address },
+        ];
+
+        await mockToken
+            .connect(user2)
+            .approve(vault.target, BigInt(commitment2.amount));
+        await vault
+            .connect(user2)
+            .deposit(
+                mockToken.target,
+                BigInt(commitment2.amount),
+                depositParams2,
+                proof2
+            );
+
+        // Verify both deposits exist
+        const [owner1, spent1] = await vault.getCommitment(
+            mockToken.target,
+            hash1
+        );
+        const [owner2, spent2] = await vault.getCommitment(
+            mockToken.target,
+            hash2
+        );
+        expect(owner1).to.equal(user1.address);
+        expect(owner2).to.equal(user2.address);
+        expect(spent1).to.equal(false);
+        expect(spent2).to.equal(false);
+
+        // Withdraw first commitment
+        const initialUser1Balance = await mockToken.balanceOf(user1.address);
+        await vault
+            .connect(user1)
+            .withdraw(
+                mockToken.target,
+                BigInt(commitment1.amount),
+                BigInt(commitment1.entropy)
+            );
+
+        const finalUser1Balance = await mockToken.balanceOf(user1.address);
+        expect(finalUser1Balance).to.equal(
+            initialUser1Balance + BigInt(commitment1.amount)
+        );
+
+        // Verify first commitment is deleted but second still exists
+        const [owner1After, spent1After] = await vault.getCommitment(
+            mockToken.target,
+            hash1
+        );
+        const [owner2After, spent2After] = await vault.getCommitment(
+            mockToken.target,
+            hash2
+        );
+        expect(owner1After).to.equal(ethers.ZeroAddress);
+        expect(owner2After).to.equal(user2.address);
+        expect(spent2After).to.equal(false);
     });
 });
