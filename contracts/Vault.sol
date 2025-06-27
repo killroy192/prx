@@ -5,12 +5,13 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./DepositVerifier.sol";
+import "./PoseidonWrapper.sol";
 
 /**
- * @title TokenDeposit
- * @dev A contract that accepts ERC20 tokens and stores them with commitments and ZK proofs
+ * @title Vault
+ * @dev A contract that manages ERC20 tokens with commitments and ZK proofs for deposits and other operations
  */
-contract TokenDeposit is ReentrancyGuard, Ownable {
+contract Vault is ReentrancyGuard, Ownable {
     // Represents a UTXO commitment: who can spend it and whether it's used
     struct Commitment {
         address owner; // authorized spender (via ECDSA)
@@ -28,13 +29,21 @@ contract TokenDeposit is ReentrancyGuard, Ownable {
     // DepositVerifier contract for ZK proof validation
     DepositVerifier public immutable depositVerifier;
 
+    // PoseidonWrapper contract for on-chain hash computation
+    PoseidonWrapper public immutable poseidonWrapper;
+
     // Events
     event TokenDeposited(address indexed user, address indexed token, uint256 amount);
     event CommitmentsAssigned(address indexed user, address indexed token, uint256 indexed poseidonHash);
+    event CommitmentWithdrawn(
+        address indexed user, address indexed token, uint256 indexed poseidonHash, uint256 amount
+    );
 
-    constructor(address _depositVerifier) Ownable(msg.sender) {
+    constructor(address _depositVerifier, address _poseidonWrapper) Ownable(msg.sender) {
         require(_depositVerifier != address(0), "TokenDeposit: Invalid verifier address");
+        require(_poseidonWrapper != address(0), "TokenDeposit: Invalid wrapper address");
         depositVerifier = DepositVerifier(_depositVerifier);
+        poseidonWrapper = PoseidonWrapper(_poseidonWrapper);
     }
 
     /**
@@ -92,5 +101,55 @@ contract TokenDeposit is ReentrancyGuard, Ownable {
         require(balance > 0, "TokenDeposit: No tokens to withdraw");
 
         IERC20(token).transfer(owner(), balance);
+    }
+
+    /**
+     * @dev Withdraw a commitment by providing amount and secret
+     * @param token The ERC20 token address
+     * @param amount The amount of tokens to withdraw
+     * @param entropy The secret entropy used to create the commitment
+     */
+    function withdraw(address token, uint256 amount, uint256 entropy) external nonReentrant {
+        require(token != address(0), "Vault: Invalid token address");
+        require(amount > 0, "Vault: Amount must be greater than 0");
+
+        // Compute the Poseidon hash on-chain
+        uint256 poseidonHash = poseidonWrapper.hash2(amount, entropy);
+
+        // Get the commitment
+        Commitment storage commitment = commitmentsMap[token][poseidonHash];
+        require(commitment.owner != address(0), "Vault: Commitment not found");
+        require(commitment.owner == msg.sender, "Vault: Only assigned address can withdraw");
+
+        // Delete the commitment from storage (saves gas)
+        delete commitmentsMap[token][poseidonHash];
+
+        // Transfer tokens to the owner
+        IERC20(token).transfer(msg.sender, amount);
+
+        // Emit withdrawal event
+        emit CommitmentWithdrawn(msg.sender, token, poseidonHash, amount);
+    }
+
+    /**
+     * @dev Compute Poseidon hash of amount and entropy on-chain
+     * @param amount The amount field element
+     * @param entropy The entropy field element
+     * @return The computed Poseidon hash
+     */
+    function computePoseidonHash(uint256 amount, uint256 entropy) external view returns (uint256) {
+        return poseidonWrapper.hash2(amount, entropy);
+    }
+
+    /**
+     * @dev Get commitment details for a given token and poseidon hash
+     * @param token The ERC20 token address
+     * @param poseidonHash The poseidon hash to look up
+     * @return owner The owner of the commitment
+     * @return spent Whether the commitment has been spent
+     */
+    function getCommitment(address token, uint256 poseidonHash) external view returns (address owner, bool spent) {
+        Commitment memory commitment = commitmentsMap[token][poseidonHash];
+        return (commitment.owner, commitment.spent);
     }
 }
