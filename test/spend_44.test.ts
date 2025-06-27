@@ -2,10 +2,14 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import circuit from "../circuits/spend_11/target/spend_11.json";
+import circuit from "../circuits/spend_44/target/spend_44.json";
 import { computePoseidon } from "../utils/poseidon";
 
-describe("Spend 11 Integration Tests", function () {
+const cloneInList = (size: number, data: object) => {
+    return Array.from({ length: size }).fill(data);
+};
+
+describe("Spend 44 Integration Tests", function () {
     let verifier: any;
     let noir: Noir;
     let backend: UltraHonkBackend;
@@ -16,7 +20,7 @@ describe("Spend 11 Integration Tests", function () {
         backend = new UltraHonkBackend(circuit.bytecode);
 
         // Deploy the verifier contract
-        const Verifier = await ethers.getContractFactory("Spend11Verifier");
+        const Verifier = await ethers.getContractFactory("Spend44Verifier");
         verifier = await Verifier.deploy();
         await verifier.waitForDeployment();
     });
@@ -28,15 +32,15 @@ describe("Spend 11 Integration Tests", function () {
             BigInt(Math.ceil(Math.random() * 1000)) *
             1962032335615093305919915752779923492862405119078726351644279745651970028n
         ).toString();
-        const tx_input = { amount, entropy };
-        const hash = await computePoseidon(tx_input);
+        const commitment = { amount, entropy };
+        const hash = await computePoseidon(commitment);
 
         const start = performance.now();
         const { witness } = await noir.execute({
-            input: tx_input,
-            input_hash: hash,
-            output: tx_input,
-            output_hash: hash,
+            inputs: cloneInList(4, commitment),
+            input_hashes: cloneInList(4, hash),
+            outputs: cloneInList(4, commitment),
+            output_hashes: cloneInList(4, hash),
             fee: 0,
         });
         const { proof, publicInputs } = await backend.generateProof(witness, {

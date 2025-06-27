@@ -33,3 +33,15 @@ pub fn verifyHashAndComputeSum_3(
         *sum = *sum + commitment.amount;
     }
 }
+
+pub fn verifyHashAndComputeSum_4(
+    commitments: [Commitment; 4],
+    hashes: [Field; 4],
+    sum: &mut Field,
+) {
+    for i in 0..4 {
+        let commitment: Commitment = commitments[i];
+        verifyCommitment(commitment, hashes[i]);
+        *sum = *sum + commitment.amount;
+    }
+}

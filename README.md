@@ -4,7 +4,7 @@ A zero-knowledge proof-based privacy-preserving payment system built with Noir c
 
 ## Overview
 
-PRX implements a privacy-preserving payment system using zero-knowledge proofs. The system allows users to make private transactions by proving the validity of their operations without revealing sensitive information like amounts or transaction details.
+PRX implements a privacy-preserving payment system using zero-knowledge proofs. The system allows users to make transactions by proving the validity of their operations without revealing sensitive information like amounts.
 
 ## Architecture
 
@@ -31,17 +31,13 @@ The project consists of several key components:
 
 ```
 prx/
-├── circuits/                 # Noir circuit implementations
-│   ├── commitment/          # Core commitment utilities
-│   ├── deposit/            # Deposit circuit
-│   ├── spend_11/           # Spend circuit variant 1
-│   ├── spend_12/           # Spend circuit variant 2
-│   ├── spend_21/           # Spend circuit variant 3
-│   └── spend_22/           # Spend circuit variant 4
+├── circuits/                    # Noir circuit implementations
+│   ├── commitment/              # Core commitment utilities
+│   ├── deposit/                 # Deposit circuit
+│   └── spend_{inputs-outputs}/  # Spend circuit variants
 ├── contracts/              # Solidity verifier contracts
 ├── test/                   # Integration tests
-├── utils/                  # Utility scripts and helpers
-└── artifacts/              # Compiled circuit artifacts
+└── utils/                  # Utility scripts and helpers
 ```
 
 ## Getting Started
@@ -83,7 +79,7 @@ npm run compile
 
 #### Generating Commitments
 ```bash
-npm run comt
+npm run comt <value>
 ```
 
 ## Circuit Details

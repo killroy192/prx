@@ -6,7 +6,7 @@
     "scripts": {
         "test": "npx hardhat test",
         "compile": "bash utils/compile.sh",
-        "comt": "ts-node utils/commitment.ts 40"
+        "comt": "ts-node utils/commitment.ts"
     },
     "keywords": [
         "noir",

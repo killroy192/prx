@@ -20,5 +20,10 @@ cd circuits
 compile_circuit deposit
 compile_circuit spend_11
 compile_circuit spend_12
+compile_circuit spend_13
 compile_circuit spend_21
 compile_circuit spend_22
+compile_circuit spend_23
+compile_circuit spend_32
+compile_circuit spend_33
+compile_circuit spend_44
