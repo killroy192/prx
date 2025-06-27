@@ -70,15 +70,15 @@ contract TokenDeposit is ReentrancyGuard, Ownable {
         bool isValidProof = depositVerifier.verify(proof, publicInputs);
         require(isValidProof, "TokenDeposit: Invalid ZK proof");
 
-        // Transfer tokens from user to contract
-        IERC20(token).transferFrom(msg.sender, address(this), total_amount);
-        emit TokenDeposited(msg.sender, token, total_amount);
-
-        // Assign commitments to addresses
+        // Assign commitments to addresses before external call
         for (uint256 i = 0; i < commitments.length; i++) {
             commitmentsMap[token][commitments[i].poseidonHash] = Commitment({owner: commitments[i].owner, spent: false});
             emit CommitmentsAssigned(commitments[i].owner, token, commitments[i].poseidonHash);
         }
+
+        // Transfer tokens from user to contract (external call)
+        IERC20(token).transferFrom(msg.sender, address(this), total_amount);
+        emit TokenDeposited(msg.sender, token, total_amount);
     }
 
     /**
