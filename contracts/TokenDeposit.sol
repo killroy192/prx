@@ -4,59 +4,81 @@ pragma solidity ^0.8.29;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./DepositVerifier.sol";
 
 /**
  * @title TokenDeposit
- * @dev A simple contract that accepts ERC20 tokens and stores them
+ * @dev A contract that accepts ERC20 tokens and stores them with commitments and ZK proofs
  */
 contract TokenDeposit is ReentrancyGuard, Ownable {
-    // Mapping to track deposits per user and token
-    mapping(address => mapping(address => uint256)) public deposits;
+    // Represents a UTXO commitment: who can spend it and whether it's used
+    struct Commitment {
+        address owner; // authorized spender (via ECDSA)
+        bool spent; // true if already consumed or withdrawn
+    }
 
-    // Mapping to track total deposits per token
-    mapping(address => uint256) public totalDeposits;
+    struct DepositCommitmentParams {
+        uint256 poseidonHash;
+        address owner;
+    }
+
+    // Mapping to track if a commitment hash has been deposited
+    mapping(address => mapping(uint256 => Commitment)) public commitmentsMap;
+
+    // DepositVerifier contract for ZK proof validation
+    DepositVerifier public immutable depositVerifier;
 
     // Events
     event TokenDeposited(address indexed user, address indexed token, uint256 amount);
+    event CommitmentsAssigned(address indexed user, address indexed token, uint256 indexed poseidonHash);
 
-    constructor() Ownable(msg.sender) {}
+    constructor(address _depositVerifier) Ownable(msg.sender) {
+        require(_depositVerifier != address(0), "TokenDeposit: Invalid verifier address");
+        depositVerifier = DepositVerifier(_depositVerifier);
+    }
 
     /**
-     * @dev Deposit ERC20 tokens into the contract
+     * @dev Deposit tokens with commitments and ZK proof validation
      * @param token The ERC20 token address to deposit
-     * @param amount The amount of tokens to deposit
+     * @param total_amount The amount of tokens to deposit
+     * @param commitments Array of commitments
+     * @param proof ZK proof bytes
      */
-    function deposit(address token, uint256 amount) external nonReentrant {
+    function deposit(
+        address token,
+        uint256 total_amount,
+        DepositCommitmentParams[3] calldata commitments,
+        bytes calldata proof
+    ) external nonReentrant {
         require(token != address(0), "TokenDeposit: Invalid token address");
-        require(amount > 0, "TokenDeposit: Amount must be greater than 0");
+        require(total_amount > 0, "TokenDeposit: Amount must be greater than 0");
+        // Check that no commitment has been used before
+        for (uint256 i = 0; i < 3; i++) {
+            require(
+                commitmentsMap[token][commitments[i].poseidonHash].owner == address(0),
+                "TokenDeposit: Commitment already used"
+            );
+        }
+
+        bytes32[] memory publicInputs = new bytes32[](4);
+        publicInputs[0] = bytes32(commitments[0].poseidonHash);
+        publicInputs[1] = bytes32(commitments[1].poseidonHash);
+        publicInputs[2] = bytes32(commitments[2].poseidonHash);
+        publicInputs[3] = bytes32(total_amount);
+
+        // Verify ZK proof
+        bool isValidProof = depositVerifier.verify(proof, publicInputs);
+        require(isValidProof, "TokenDeposit: Invalid ZK proof");
 
         // Transfer tokens from user to contract
-        IERC20(token).transferFrom(msg.sender, address(this), amount);
+        IERC20(token).transferFrom(msg.sender, address(this), total_amount);
+        emit TokenDeposited(msg.sender, token, total_amount);
 
-        // Update deposit records
-        deposits[msg.sender][token] += amount;
-        totalDeposits[token] += amount;
-
-        emit TokenDeposited(msg.sender, token, amount);
-    }
-
-    /**
-     * @dev Get the balance of a specific token for a user
-     * @param user The user address
-     * @param token The ERC20 token address
-     * @return The balance of the token for the user
-     */
-    function getBalance(address user, address token) external view returns (uint256) {
-        return deposits[user][token];
-    }
-
-    /**
-     * @dev Get the total deposits for a specific token
-     * @param token The ERC20 token address
-     * @return The total amount of tokens deposited
-     */
-    function getTotalDeposits(address token) external view returns (uint256) {
-        return totalDeposits[token];
+        // Assign commitments to addresses
+        for (uint256 i = 0; i < commitments.length; i++) {
+            commitmentsMap[token][commitments[i].poseidonHash] = Commitment({owner: commitments[i].owner, spent: false});
+            emit CommitmentsAssigned(commitments[i].owner, token, commitments[i].poseidonHash);
+        }
     }
 
     /**
