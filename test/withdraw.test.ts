@@ -3,82 +3,25 @@ import { ethers } from "hardhat";
 import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
 import { Vault } from "../typechain-types/contracts/Vault";
+import { setupDeposit, makeCommitments } from "./utils/vaultTestUtils";
 
 describe("Vault - Withdraw", function () {
     it("Should successfully withdraw a commitment", async function () {
         const { vault, mockToken, user1, user2, user3, noir, backend } =
             await useDeploymentFixture();
 
-        // Create a commitment for withdrawal testing
-        const commitment = {
-            amount: "5000000000000000000", // 5 tokens
-            entropy:
-                "123456789012345678901234567890123456789012345678901234567890123",
-        };
-
-        const totalAmount = "5000000000000000000"; // 5 tokens total
-
-        // Create zero-amount commitments
-        const zeroCommitment1 = {
-            amount: "0",
-            entropy:
-                "345678901234567890123456789012345678901234567890123456789012345",
-        };
-        const zeroCommitment2 = {
-            amount: "0",
-            entropy:
-                "456789012345678901234567890123456789012345678901234567890123456",
-        };
-
-        // Compute poseidon hashes for all commitments
-        const hash = await computePoseidon(commitment);
-        const hash1 = await computePoseidon(zeroCommitment1);
-        const hash2 = await computePoseidon(zeroCommitment2);
-
-        // Create the input for the circuit
-        const input = {
-            commitments: [commitment, zeroCommitment1, zeroCommitment2],
-            hashes: [hash, hash1, hash2],
-            total_amount: totalAmount,
-        };
-
-        // Generate the proof
-        const { witness } = await noir.execute(input);
-        const { proof } = await backend.generateProof(witness, {
-            keccak: true,
-        });
-
-        const depositCommitmentParams: [
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct
-        ] = [
-            {
-                poseidonHash: hash,
-                owner: user1.address,
-            },
-            {
-                poseidonHash: hash1,
-                owner: user2.address,
-            },
-            {
-                poseidonHash: hash2,
-                owner: user3.address,
-            },
-        ];
-
-        // Deposit tokens
-        await mockToken
-            .connect(user1)
-            .approve(vault.target, BigInt(totalAmount));
-        await vault
-            .connect(user1)
-            .deposit(
-                mockToken.target,
-                BigInt(totalAmount),
-                depositCommitmentParams,
-                proof
-            );
+        // Use utility to setup deposit
+        const amounts = ["5000000000000000000", "0", "0"];
+        const owners = [user1.address, user2.address, user3.address];
+        const { commitments, hashes } = await setupDeposit(
+            vault,
+            mockToken,
+            user1,
+            amounts,
+            owners,
+            noir,
+            backend
+        );
 
         // Check initial balances
         const initialVaultBalance = await mockToken.balanceOf(vault.target);
@@ -89,8 +32,8 @@ describe("Vault - Withdraw", function () {
             .connect(user1)
             .withdraw(
                 mockToken.target,
-                BigInt(commitment.amount),
-                BigInt(commitment.entropy)
+                BigInt(commitments[0].amount),
+                BigInt(commitments[0].entropy)
             );
 
         // Check final balances
@@ -99,16 +42,16 @@ describe("Vault - Withdraw", function () {
 
         // Verify balances
         expect(finalVaultBalance).to.equal(
-            initialVaultBalance - BigInt(commitment.amount)
+            initialVaultBalance - BigInt(commitments[0].amount)
         );
         expect(finalUserBalance).to.equal(
-            initialUserBalance + BigInt(commitment.amount)
+            initialUserBalance + BigInt(commitments[0].amount)
         );
 
         // Verify commitment is deleted from storage
         const [owner, spent] = await vault.getCommitment(
             mockToken.target,
-            hash
+            hashes[0]
         );
         expect(owner).to.equal(ethers.ZeroAddress);
         expect(spent).to.equal(false); // Default value for non-existent commitment
@@ -118,64 +61,18 @@ describe("Vault - Withdraw", function () {
         const { vault, mockToken, user1, user2, user3, noir, backend } =
             await useDeploymentFixture();
 
-        // Create and deposit a commitment
-        const commitment = {
-            amount: "3000000000000000000", // 3 tokens
-            entropy:
-                "987654321098765432109876543210987654321098765432109876543210987",
-        };
-
-        const totalAmount = "3000000000000000000";
-
-        // Create zero-amount commitments
-        const zeroCommitment1 = {
-            amount: "0",
-            entropy:
-                "111111111111111111111111111111111111111111111111111111111111111",
-        };
-        const zeroCommitment2 = {
-            amount: "0",
-            entropy:
-                "222222222222222222222222222222222222222222222222222222222222222",
-        };
-
-        // Compute poseidon hashes for all commitments
-        const hash = await computePoseidon(commitment);
-        const hash1 = await computePoseidon(zeroCommitment1);
-        const hash2 = await computePoseidon(zeroCommitment2);
-
-        const input = {
-            commitments: [commitment, zeroCommitment1, zeroCommitment2],
-            hashes: [hash, hash1, hash2],
-            total_amount: totalAmount,
-        };
-
-        const { witness } = await noir.execute(input);
-        const { proof } = await backend.generateProof(witness, {
-            keccak: true,
-        });
-
-        const depositCommitmentParams: [
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct
-        ] = [
-            { poseidonHash: hash, owner: user1.address },
-            { poseidonHash: hash1, owner: user2.address },
-            { poseidonHash: hash2, owner: user3.address },
-        ];
-
-        await mockToken
-            .connect(user1)
-            .approve(vault.target, BigInt(totalAmount));
-        await vault
-            .connect(user1)
-            .deposit(
-                mockToken.target,
-                BigInt(totalAmount),
-                depositCommitmentParams,
-                proof
-            );
+        // Use utility to setup deposit
+        const amounts = ["3000000000000000000", "0", "0"];
+        const owners = [user1.address, user2.address, user3.address];
+        const { commitments, hashes } = await setupDeposit(
+            vault,
+            mockToken,
+            user1,
+            amounts,
+            owners,
+            noir,
+            backend
+        );
 
         // Try to withdraw with wrong address
         await expect(
@@ -183,8 +80,8 @@ describe("Vault - Withdraw", function () {
                 .connect(user2)
                 .withdraw(
                     mockToken.target,
-                    BigInt(commitment.amount),
-                    BigInt(commitment.entropy)
+                    BigInt(commitments[0].amount),
+                    BigInt(commitments[0].entropy)
                 )
         ).to.be.revertedWith("Vault: Only assigned address can withdraw");
     });
@@ -210,31 +107,30 @@ describe("Vault - Withdraw", function () {
     it("Should revert withdrawal with zero amount", async function () {
         const { vault, mockToken, user1 } = await useDeploymentFixture();
 
+        const fakeEntropy =
+            "123456789012345678901234567890123456789012345678901234567890123";
+
         await expect(
             vault
                 .connect(user1)
-                .withdraw(
-                    mockToken.target,
-                    0,
-                    BigInt(
-                        "123456789012345678901234567890123456789012345678901234567890123"
-                    )
-                )
+                .withdraw(mockToken.target, 0, BigInt(fakeEntropy))
         ).to.be.revertedWith("Vault: Amount must be greater than 0");
     });
 
     it("Should revert withdrawal with invalid token address", async function () {
         const { vault, user1 } = await useDeploymentFixture();
 
+        const fakeAmount = "1000000000000000000";
+        const fakeEntropy =
+            "123456789012345678901234567890123456789012345678901234567890123";
+
         await expect(
             vault
                 .connect(user1)
                 .withdraw(
                     ethers.ZeroAddress,
-                    BigInt("1000000000000000000"),
-                    BigInt(
-                        "123456789012345678901234567890123456789012345678901234567890123"
-                    )
+                    BigInt(fakeAmount),
+                    BigInt(fakeEntropy)
                 )
         ).to.be.revertedWith("Vault: Invalid token address");
     });
@@ -243,82 +139,36 @@ describe("Vault - Withdraw", function () {
         const { vault, mockToken, user1, user2, user3, noir, backend } =
             await useDeploymentFixture();
 
-        // Create and deposit a commitment
-        const commitment = {
-            amount: "2000000000000000000", // 2 tokens
-            entropy:
-                "123456789012345678901234567890123456789012345678901234567890123",
-        };
+        // Use utility to setup deposit
+        const amounts = ["1000000000000000000", "0", "0"];
+        const owners = [user1.address, user2.address, user3.address];
+        const { commitments, hashes } = await setupDeposit(
+            vault,
+            mockToken,
+            user1,
+            amounts,
+            owners,
+            noir,
+            backend
+        );
 
-        const totalAmount = "2000000000000000000";
-
-        // Create zero-amount commitments
-        const zeroCommitment1 = {
-            amount: "0",
-            entropy:
-                "111111111111111111111111111111111111111111111111111111111111111",
-        };
-        const zeroCommitment2 = {
-            amount: "0",
-            entropy:
-                "222222222222222222222222222222222222222222222222222222222222222",
-        };
-
-        // Compute poseidon hashes for all commitments
-        const hash = await computePoseidon(commitment);
-        const hash1 = await computePoseidon(zeroCommitment1);
-        const hash2 = await computePoseidon(zeroCommitment2);
-
-        const input = {
-            commitments: [commitment, zeroCommitment1, zeroCommitment2],
-            hashes: [hash, hash1, hash2],
-            total_amount: totalAmount,
-        };
-
-        const { witness } = await noir.execute(input);
-        const { proof } = await backend.generateProof(witness, {
-            keccak: true,
-        });
-
-        const depositCommitmentParams: [
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct
-        ] = [
-            { poseidonHash: hash, owner: user1.address },
-            { poseidonHash: hash1, owner: user2.address },
-            { poseidonHash: hash2, owner: user3.address },
-        ];
-
-        await mockToken
-            .connect(user1)
-            .approve(vault.target, BigInt(totalAmount));
-        await vault
-            .connect(user1)
-            .deposit(
-                mockToken.target,
-                BigInt(totalAmount),
-                depositCommitmentParams,
-                proof
-            );
-
-        // First withdrawal should succeed
+        // Withdraw the commitment
         await vault
             .connect(user1)
             .withdraw(
                 mockToken.target,
-                BigInt(commitment.amount),
-                BigInt(commitment.entropy)
+                BigInt(commitments[0].amount),
+                BigInt(commitments[0].entropy)
             );
 
-        // Second withdrawal should fail (commitment deleted)
+        // Try to withdraw again
         await expect(
             vault
                 .connect(user1)
                 .withdraw(
                     mockToken.target,
-                    BigInt(commitment.amount),
-                    BigInt(commitment.entropy)
+                    BigInt(commitments[0].amount),
+                    BigInt(commitments[0].entropy)
                 )
         ).to.be.revertedWith("Vault: Commitment not found");
     });

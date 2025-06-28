@@ -2,92 +2,64 @@ import { expect } from "chai";
 import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
 import { Vault } from "../typechain-types/contracts/Vault";
+import {
+    makeCommitmentsWithHashes,
+    setupDeposit,
+} from "./utils/vaultTestUtils";
 
 describe("Vault - Deposit", function () {
     it("Should successfully deposit with valid ZK proof using current contract logic", async function () {
         const { vault, mockToken, user1, user2, user3, noir, backend } =
             await useDeploymentFixture();
 
-        // Create commitments with amounts and entropy
-        const commitments = [
-            {
-                amount: "1000000000000000000", // 1 token
-                entropy:
-                    "0x123456789012345678901234567890123456789012345678901234567890123",
-            },
-            {
-                amount: "2000000000000000000", // 2 tokens
-                entropy:
-                    "0x345678901234567890123456789012345678901234567890123456789012345",
-            },
-            {
-                amount: "3000000000000000000", // 3 tokens
-                entropy:
-                    "0x456789012345678901234567890123456789012345678901234567890123456",
-            },
+        // Use utility to create commitments and hashes
+        const amounts = [
+            "1000000000000000000",
+            "2000000000000000000",
+            "3000000000000000000",
         ];
+        const owners = [user1.address, user2.address, user3.address];
+        const totalAmount = amounts
+            .reduce((sum, a) => sum + BigInt(a), 0n)
+            .toString();
 
-        const totalAmount = "6000000000000000000"; // 6 tokens total
+        // Use setupDeposit utility (this already performs the deposit)
+        const { commitments, hashes, proof } = await setupDeposit(
+            vault,
+            mockToken,
+            user1,
+            amounts,
+            owners,
+            noir,
+            backend
+        );
 
-        // Compute poseidon hashes for each commitment
-        const hashes = [];
-        for (let i = 0; i < 3; i++) {
-            hashes.push(await computePoseidon(commitments[i]));
-        }
-
-        // Create the input for the circuit
+        // Verify the proof locally (optional, but kept for completeness)
         const input = {
-            commitments: commitments,
-            hashes: hashes,
+            commitments: commitments as any,
+            hashes,
             total_amount: totalAmount,
         };
-
-        // Generate the proof
         const { witness } = await noir.execute(input);
-        const { proof, publicInputs } = await backend.generateProof(witness, {
-            keccak: true,
-        });
-
-        // Verify the proof locally first
+        const { proof: localProof, publicInputs } = await backend.generateProof(
+            witness,
+            { keccak: true }
+        );
         const isValidLocal = await backend.verifyProof(
-            { proof, publicInputs },
+            { proof: localProof, publicInputs },
             { keccak: true }
         );
         expect(isValidLocal).to.be.true;
 
-        const depositCommitmentParams: [
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct,
-            Vault.DepositCommitmentParamsStruct
-        ] = [
-            {
-                poseidonHash: hashes[0],
-                owner: user1.address,
-            },
-            {
-                poseidonHash: hashes[1],
-                owner: user2.address,
-            },
-            {
-                poseidonHash: hashes[2],
-                owner: user3.address,
-            },
-        ];
-
-        // Approve tokens
-        await mockToken
-            .connect(user1)
-            .approve(vault.target, BigInt(totalAmount));
-
-        // Deposit tokens
-        await vault
-            .connect(user1)
-            .deposit(
+        // Assert that commitments are stored correctly
+        for (let i = 0; i < 3; i++) {
+            const [owner, spent] = await vault.getCommitment(
                 mockToken.target,
-                BigInt(totalAmount),
-                depositCommitmentParams,
-                proof
+                hashes[i]
             );
+            expect(owner).to.equal(owners[i]);
+            expect(spent).to.equal(false);
+        }
 
         console.log("Test passed - contract logic is correct!");
     });
@@ -97,7 +69,7 @@ describe("Vault - Deposit", function () {
 
         const amount = "1000000000000000000"; // 1 token
         const entropy =
-            "0x123456789012345678901234567890123456789012345678901234567890123";
+            "123456789012345678901234567890123456789012345678901234567890123";
 
         // Compute hash off-chain
         const offChainHash = await computePoseidon({ amount, entropy });
