@@ -62,7 +62,7 @@ describe("Vault - Withdraw", function () {
         // Use utility to setup deposit
         const amounts = ["3000000000000000000", "0", "0"];
         const owners = [user1.address, user2.address, user3.address];
-        const { commitments, hashes } = await setupDeposit(
+        const { commitments } = await setupDeposit(
             vault,
             mockToken,
             user1,
@@ -140,7 +140,7 @@ describe("Vault - Withdraw", function () {
         // Use utility to setup deposit
         const amounts = ["1000000000000000000", "0", "0"];
         const owners = [user1.address, user2.address, user3.address];
-        const { commitments, hashes } = await setupDeposit(
+        const { commitments } = await setupDeposit(
             vault,
             mockToken,
             user1,

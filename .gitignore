@@ -47,3 +47,9 @@ coverage/
 
 # Yarn Integrity file
 .yarn-integrity
+
+# Environment variables
+.env
+
+# Local deployment lock file
+local.deployment-lock.json

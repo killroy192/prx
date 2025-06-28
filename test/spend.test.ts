@@ -22,8 +22,6 @@ import {
     createFutureDeadline,
 } from "./utils/vaultTestUtils";
 
-const abi = ethers.AbiCoder.defaultAbiCoder();
-
 describe("Vault - Spend", function () {
     it("Should successfully spend a commitment (1-to-1 transaction)", async function () {
         const { vault, mockToken, user1, user2, noir, backend } =
