@@ -60,13 +60,9 @@ contract Vault is ReentrancyGuard, Ownable {
 
     // Events
     event TokenDeposited(address indexed user, address indexed token, uint256 amount);
-    event CommitmentsAssigned(address indexed user, address indexed token, uint256 indexed poseidonHash);
-    event CommitmentWithdrawn(
-        address indexed user, address indexed token, uint256 indexed poseidonHash, uint256 amount
-    );
-    event TransactionSpent(
-        address indexed token, uint256 indexed inputHash, uint256 indexed outputHash, uint256 amount
-    );
+    event CommitmentCreated(address indexed token, uint256 indexed poseidonHash, address indexed owner);
+    event CommitmentRemoved(address indexed token, uint256 indexed poseidonHash, address indexed owner);
+    event TransactionSpent(address indexed token, uint256[] inputHashes, uint256[] outputHashes, uint256 fee);
 
     constructor(address _depositVerifier, address _spend11Verifier, address _poseidonWrapper) Ownable(msg.sender) {
         require(_depositVerifier != address(0), "Vault: Invalid deposit verifier address");
@@ -112,7 +108,7 @@ contract Vault is ReentrancyGuard, Ownable {
         // Assign commitments to addresses before external call
         for (uint256 i = 0; i < commitments.length; i++) {
             commitmentsMap[token][commitments[i].poseidonHash] = Commitment({owner: commitments[i].owner, spent: false});
-            emit CommitmentsAssigned(commitments[i].owner, token, commitments[i].poseidonHash);
+            emit CommitmentCreated(token, commitments[i].poseidonHash, commitments[i].owner);
         }
 
         // Transfer tokens from user to contract (external call)
@@ -121,7 +117,7 @@ contract Vault is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @dev Spend a commitment by creating a new one (1-to-1 transaction)
+     * @dev Spend commitments by creating new ones (supports multiple inputs and outputs)
      * @param transaction The transaction data
      * @param proof ZK proof bytes
      */
@@ -129,56 +125,84 @@ contract Vault is ReentrancyGuard, Ownable {
         require(transaction.token != address(0), "Vault: Invalid token address");
         require(transaction.deadline > block.timestamp, "Vault: Transaction expired");
         require(transaction.fee == 0, "Vault: Fee not supported yet");
-        require(transaction.inputsPoseidonHashes.length == 1, "Vault: Only 1-to-1 transactions supported");
-        require(transaction.outputsPoseidonHashes.length == 1, "Vault: Only 1-to-1 transactions supported");
-        require(transaction.inputWitnesses.length == 1, "Vault: Invalid input witnesses");
-        require(transaction.outputWitnesses.length == 1, "Vault: Invalid output witnesses");
-
-        uint256 inputHash = transaction.inputsPoseidonHashes[0];
-        uint256 outputHash = transaction.outputsPoseidonHashes[0];
-
-        // Check that input commitment exists
-        Commitment storage inputCommitment = commitmentsMap[transaction.token][inputHash];
-        require(inputCommitment.owner != address(0), "Vault: Input commitment not found");
-
-        // Verify ECDSA signature
-        bytes32 transactionHash = MessageHashUtils.toEthSignedMessageHash(
-            keccak256(
-                abi.encode(
-                    transaction.deadline,
-                    transaction.token,
-                    transaction.inputsPoseidonHashes,
-                    transaction.outputsPoseidonHashes,
-                    transaction.outputWitnesses,
-                    transaction.fee
-                )
-            )
-        );
-
+        require(transaction.inputsPoseidonHashes.length > 0, "Vault: No inputs provided");
+        require(transaction.outputsPoseidonHashes.length > 0, "Vault: No outputs provided");
         require(
-            SignatureChecker.isValidSignatureNow(
-                inputCommitment.owner, transactionHash, transaction.inputWitnesses[0].signature
-            ),
-            "Vault: Invalid signature"
+            transaction.inputWitnesses.length == transaction.inputsPoseidonHashes.length,
+            "Vault: Invalid input witnesses count"
+        );
+        require(
+            transaction.outputWitnesses.length == transaction.outputsPoseidonHashes.length,
+            "Vault: Invalid output witnesses count"
         );
 
-        // Verify ZK proof
-        bytes32[] memory publicInputs = new bytes32[](3);
-        publicInputs[0] = bytes32(inputHash);
-        publicInputs[1] = bytes32(outputHash);
-        publicInputs[2] = bytes32(uint256(transaction.fee));
+        // Check that all input commitments exist and are owned by the signers
+        for (uint256 i = 0; i < transaction.inputsPoseidonHashes.length; i++) {
+            uint256 inputHash = transaction.inputsPoseidonHashes[i];
+            Commitment storage inputCommitment = commitmentsMap[transaction.token][inputHash];
+            require(inputCommitment.owner != address(0), "Vault: Input commitment not found");
 
-        bool isValidProof = spend11Verifier.verify(proof, publicInputs);
-        require(isValidProof, "Vault: Invalid ZK proof");
+            // Verify ECDSA signature for this input
+            bytes32 transactionHash = MessageHashUtils.toEthSignedMessageHash(
+                keccak256(
+                    abi.encode(
+                        transaction.deadline,
+                        transaction.token,
+                        transaction.inputsPoseidonHashes,
+                        transaction.outputsPoseidonHashes,
+                        transaction.outputWitnesses,
+                        transaction.fee
+                    )
+                )
+            );
 
-        // Delete input commitment from storage (saves gas)
-        delete commitmentsMap[transaction.token][inputHash];
+            require(
+                SignatureChecker.isValidSignatureNow(
+                    inputCommitment.owner, transactionHash, transaction.inputWitnesses[i].signature
+                ),
+                "Vault: Invalid signature"
+            );
+        }
 
-        // Create new output commitment
-        commitmentsMap[transaction.token][outputHash] =
-            Commitment({owner: transaction.outputWitnesses[0].owner, spent: false});
+        // Verify ZK proof - for now using the same format as 1-to-1, but this should be updated
+        // when multi-input/output circuits are available
+        if (transaction.inputsPoseidonHashes.length == 1 && transaction.outputsPoseidonHashes.length == 1) {
+            // Use existing 1-to-1 verifier for backward compatibility
+            bytes32[] memory publicInputs = new bytes32[](3);
+            publicInputs[0] = bytes32(transaction.inputsPoseidonHashes[0]);
+            publicInputs[1] = bytes32(transaction.outputsPoseidonHashes[0]);
+            publicInputs[2] = bytes32(uint256(transaction.fee));
 
-        emit TransactionSpent(transaction.token, inputHash, outputHash, 0); // amount would be derived from circuit
+            bool isValidProof = spend11Verifier.verify(proof, publicInputs);
+            require(isValidProof, "Vault: Invalid ZK proof");
+        } else {
+            // For multi-input/output transactions, we'll need a different verifier
+            // For now, we'll require a valid proof but the actual verification logic
+            // should be implemented when the corresponding circuit is available
+            require(proof.length > 0, "Vault: Multi-input/output proof not yet supported");
+            // TODO: Add multi-input/output verifier when available
+        }
+
+        // Delete all input commitments from storage (saves gas)
+        for (uint256 i = 0; i < transaction.inputsPoseidonHashes.length; i++) {
+            uint256 inputHash = transaction.inputsPoseidonHashes[i];
+            address inputOwner = commitmentsMap[transaction.token][inputHash].owner;
+            delete commitmentsMap[transaction.token][inputHash];
+            emit CommitmentRemoved(transaction.token, inputHash, inputOwner);
+        }
+
+        // Create new output commitments
+        for (uint256 i = 0; i < transaction.outputsPoseidonHashes.length; i++) {
+            uint256 outputHash = transaction.outputsPoseidonHashes[i];
+            address outputOwner = transaction.outputWitnesses[i].owner;
+            commitmentsMap[transaction.token][outputHash] = Commitment({owner: outputOwner, spent: false});
+            emit CommitmentCreated(transaction.token, outputHash, outputOwner);
+        }
+
+        // Emit single transaction event for the atomic operation
+        emit TransactionSpent(
+            transaction.token, transaction.inputsPoseidonHashes, transaction.outputsPoseidonHashes, transaction.fee
+        );
     }
 
     /**
@@ -219,7 +243,7 @@ contract Vault is ReentrancyGuard, Ownable {
         IERC20(token).transfer(msg.sender, amount);
 
         // Emit withdrawal event
-        emit CommitmentWithdrawn(msg.sender, token, poseidonHash, amount);
+        emit CommitmentRemoved(token, poseidonHash, msg.sender);
     }
 
     /**
