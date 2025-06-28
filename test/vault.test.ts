@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
+import { Vault } from "../typechain-types/contracts/Vault";
 
 describe("Vault - Integration", function () {
     it("Should successfully deposit and withdraw in sequence", async function () {
@@ -45,7 +46,11 @@ describe("Vault - Integration", function () {
             keccak: true,
         });
 
-        const depositCommitmentParams: [any, any, any] = [
+        const depositCommitmentParams: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             { poseidonHash: hash, owner: user1.address },
             { poseidonHash: hash1, owner: user2.address },
             { poseidonHash: hash2, owner: user3.address },
@@ -134,7 +139,11 @@ describe("Vault - Integration", function () {
             keccak: true,
         });
 
-        const depositParams1: [any, any, any] = [
+        const depositParams1: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             { poseidonHash: hash1, owner: user1.address },
             { poseidonHash: hashZero1, owner: user2.address },
             { poseidonHash: hashZero2, owner: user3.address },
@@ -185,7 +194,11 @@ describe("Vault - Integration", function () {
             keccak: true,
         });
 
-        const depositParams2: [any, any, any] = [
+        const depositParams2: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             { poseidonHash: hash2, owner: user2.address },
             { poseidonHash: hashZero3, owner: user1.address },
             { poseidonHash: hashZero4, owner: user3.address },

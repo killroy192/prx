@@ -8,7 +8,7 @@ export async function computePoseidon({
 }: {
     amount: string;
     entropy: string;
-}) {
+}): Promise<string> {
     const poseidon = await poseidon_;
     return poseidon.F.toString(poseidon([BigInt(amount), BigInt(entropy)]));
 }

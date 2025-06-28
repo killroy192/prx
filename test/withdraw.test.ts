@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
+import { Vault } from "../typechain-types/contracts/Vault";
 
 describe("Vault - Withdraw", function () {
     it("Should successfully withdraw a commitment", async function () {
@@ -47,7 +48,11 @@ describe("Vault - Withdraw", function () {
             keccak: true,
         });
 
-        const depositCommitmentParams: [any, any, any] = [
+        const depositCommitmentParams: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             {
                 poseidonHash: hash,
                 owner: user1.address,
@@ -150,7 +155,11 @@ describe("Vault - Withdraw", function () {
             keccak: true,
         });
 
-        const depositCommitmentParams: [any, any, any] = [
+        const depositCommitmentParams: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             { poseidonHash: hash, owner: user1.address },
             { poseidonHash: hash1, owner: user2.address },
             { poseidonHash: hash2, owner: user3.address },
@@ -271,7 +280,11 @@ describe("Vault - Withdraw", function () {
             keccak: true,
         });
 
-        const depositCommitmentParams: [any, any, any] = [
+        const depositCommitmentParams: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             { poseidonHash: hash, owner: user1.address },
             { poseidonHash: hash1, owner: user2.address },
             { poseidonHash: hash2, owner: user3.address },

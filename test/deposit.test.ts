@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
+import { Vault } from "../typechain-types/contracts/Vault";
 
 describe("Vault - Deposit", function () {
     it("Should successfully deposit with valid ZK proof using current contract logic", async function () {
@@ -55,7 +55,11 @@ describe("Vault - Deposit", function () {
         );
         expect(isValidLocal).to.be.true;
 
-        const depositCommitmentParams: [any, any, any] = [
+        const depositCommitmentParams: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             {
                 poseidonHash: hashes[0],
                 owner: user1.address,

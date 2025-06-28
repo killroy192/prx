@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { useDeploymentFixture } from "./fixtures/deployment";
 import { computePoseidon } from "../utils/poseidon";
+import { Vault } from "../typechain-types/contracts/Vault";
 
 describe("Vault - Emergency Withdraw", function () {
     it("Should allow owner to emergency withdraw all tokens", async function () {
@@ -48,7 +49,11 @@ describe("Vault - Emergency Withdraw", function () {
             keccak: true,
         });
 
-        const depositCommitmentParams: [any, any, any] = [
+        const depositCommitmentParams: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             {
                 poseidonHash: hashes[0],
                 owner: user1.address,
@@ -112,7 +117,11 @@ describe("Vault - Emergency Withdraw", function () {
             keccak: true,
         });
 
-        const depositCommitmentParams2: [any, any, any] = [
+        const depositCommitmentParams2: [
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct,
+            Vault.DepositCommitmentParamsStruct
+        ] = [
             {
                 poseidonHash: hashes2[0],
                 owner: user2.address,

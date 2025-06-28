@@ -1,9 +1,11 @@
 import { ethers } from "hardhat";
+import { type HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { loadFixture } from "@nomicfoundation/hardhat-toolbox/network-helpers";
 import {
     Vault,
     MockERC20,
     DepositVerifier,
+    Spend11Verifier,
     PoseidonWrapper,
 } from "../../typechain-types";
 import { UltraHonkBackend } from "@aztec/bb.js";
@@ -14,11 +16,12 @@ export interface DeploymentFixture {
     vault: Vault;
     mockToken: MockERC20;
     depositVerifier: DepositVerifier;
+    spend11Verifier: Spend11Verifier;
     poseidonWrapper: PoseidonWrapper;
-    owner: any;
-    user1: any;
-    user2: any;
-    user3: any;
+    owner: HardhatEthersSigner;
+    user1: HardhatEthersSigner;
+    user2: HardhatEthersSigner;
+    user3: HardhatEthersSigner;
     noir: Noir;
     backend: UltraHonkBackend;
 }
@@ -35,6 +38,12 @@ export async function deployFixture(): Promise<DeploymentFixture> {
         "DepositVerifier"
     );
     const depositVerifier = await DepositVerifierFactory.deploy();
+
+    // Deploy Spend11Verifier
+    const Spend11VerifierFactory = await ethers.getContractFactory(
+        "Spend11Verifier"
+    );
+    const spend11Verifier = await Spend11VerifierFactory.deploy();
 
     // Deploy PoseidonT3 library
     const PoseidonT3Factory = await ethers.getContractFactory("PoseidonT3");
@@ -59,6 +68,7 @@ export async function deployFixture(): Promise<DeploymentFixture> {
     const VaultFactory = await ethers.getContractFactory("Vault");
     const vault = await VaultFactory.deploy(
         depositVerifier.target,
+        spend11Verifier.target,
         poseidonWrapper.target
     );
 
@@ -71,6 +81,7 @@ export async function deployFixture(): Promise<DeploymentFixture> {
         vault,
         mockToken,
         depositVerifier,
+        spend11Verifier,
         poseidonWrapper,
         owner,
         user1,
