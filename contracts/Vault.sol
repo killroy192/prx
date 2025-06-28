@@ -9,6 +9,12 @@ import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/Messa
 import {DepositVerifier} from "./DepositVerifier.sol";
 import {Spend11Verifier} from "./Spend11Verifier.sol";
 import {Spend12Verifier} from "./Spend12Verifier.sol";
+import {Spend13Verifier} from "./Spend13Verifier.sol";
+import {Spend21Verifier} from "./Spend21Verifier.sol";
+import {Spend22Verifier} from "./Spend22Verifier.sol";
+import {Spend23Verifier} from "./Spend23Verifier.sol";
+import {Spend31Verifier} from "./Spend31Verifier.sol";
+import {Spend32Verifier} from "./Spend32Verifier.sol";
 import {PoseidonWrapper} from "./PoseidonWrapper.sol";
 
 /**
@@ -59,6 +65,24 @@ contract Vault is ReentrancyGuard, Ownable {
     // Spend12Verifier contract for ZK proof validation
     Spend12Verifier public immutable spend12Verifier;
 
+    // Spend13Verifier contract for ZK proof validation
+    Spend13Verifier public immutable spend13Verifier;
+
+    // Spend21Verifier contract for ZK proof validation
+    Spend21Verifier public immutable spend21Verifier;
+
+    // Spend22Verifier contract for ZK proof validation
+    Spend22Verifier public immutable spend22Verifier;
+
+    // Spend23Verifier contract for ZK proof validation
+    Spend23Verifier public immutable spend23Verifier;
+
+    // Spend31Verifier contract for ZK proof validation
+    Spend31Verifier public immutable spend31Verifier;
+
+    // Spend32Verifier contract for ZK proof validation
+    Spend32Verifier public immutable spend32Verifier;
+
     // PoseidonWrapper contract for on-chain hash computation
     PoseidonWrapper public immutable poseidonWrapper;
 
@@ -68,16 +92,37 @@ contract Vault is ReentrancyGuard, Ownable {
     event CommitmentRemoved(address indexed token, uint256 indexed poseidonHash, address indexed owner);
     event TransactionSpent(address indexed token, uint256[] inputHashes, uint256[] outputHashes, uint256 fee);
 
-    constructor(address _depositVerifier, address _spend11Verifier, address _spend12Verifier, address _poseidonWrapper)
-        Ownable(msg.sender)
-    {
+    constructor(
+        address _depositVerifier,
+        address _spend11Verifier,
+        address _spend12Verifier,
+        address _spend13Verifier,
+        address _spend21Verifier,
+        address _spend22Verifier,
+        address _spend23Verifier,
+        address _spend31Verifier,
+        address _spend32Verifier,
+        address _poseidonWrapper
+    ) Ownable(msg.sender) {
         require(_depositVerifier != address(0), "Vault: Invalid deposit verifier address");
         require(_spend11Verifier != address(0), "Vault: Invalid spend verifier address");
         require(_spend12Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend13Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend21Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend22Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend23Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend31Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend32Verifier != address(0), "Vault: Invalid spend verifier address");
         require(_poseidonWrapper != address(0), "Vault: Invalid wrapper address");
         depositVerifier = DepositVerifier(_depositVerifier);
         spend11Verifier = Spend11Verifier(_spend11Verifier);
         spend12Verifier = Spend12Verifier(_spend12Verifier);
+        spend13Verifier = Spend13Verifier(_spend13Verifier);
+        spend21Verifier = Spend21Verifier(_spend21Verifier);
+        spend22Verifier = Spend22Verifier(_spend22Verifier);
+        spend23Verifier = Spend23Verifier(_spend23Verifier);
+        spend31Verifier = Spend31Verifier(_spend31Verifier);
+        spend32Verifier = Spend32Verifier(_spend32Verifier);
         poseidonWrapper = PoseidonWrapper(_poseidonWrapper);
     }
 
@@ -240,6 +285,36 @@ contract Vault is ReentrancyGuard, Ownable {
     }
 
     /**
+     * @dev Craft public inputs array for ZK proof verification
+     * @param transaction The transaction data
+     * @return publicInputs Array of public inputs in the format: [inputHashes..., outputHashes..., fee]
+     */
+    function _craftPublicInputs(Transaction calldata transaction)
+        internal
+        pure
+        returns (bytes32[] memory publicInputs)
+    {
+        uint256 totalInputs = transaction.inputsPoseidonHashes.length;
+        uint256 totalOutputs = transaction.outputsPoseidonHashes.length;
+
+        // Initialize array: inputs + outputs + fee
+        publicInputs = new bytes32[](totalInputs + totalOutputs + 1);
+
+        // Fill input hashes
+        for (uint256 i = 0; i < totalInputs; i++) {
+            publicInputs[i] = bytes32(transaction.inputsPoseidonHashes[i]);
+        }
+
+        // Fill output hashes
+        for (uint256 i = 0; i < totalOutputs; i++) {
+            publicInputs[totalInputs + i] = bytes32(transaction.outputsPoseidonHashes[i]);
+        }
+
+        // Fill fee at the end
+        publicInputs[totalInputs + totalOutputs] = bytes32(uint256(transaction.fee));
+    }
+
+    /**
      * @dev Spend commitments by creating new ones (supports multiple inputs and outputs)
      * @param transaction The transaction data
      * @param proof ZK proof bytes
@@ -258,33 +333,30 @@ contract Vault is ReentrancyGuard, Ownable {
         // Verify input witnesses and signatures
         _verifyInputWitnesses(transaction);
 
-        // Verify ZK proof - support for 1-to-1 and 1-to-2 transactions
+        // Craft public inputs for ZK proof verification
+        bytes32[] memory publicInputs = _craftPublicInputs(transaction);
+
+        // Verify ZK proof based on input/output combination
+        bool isValidProof = false;
         if (transaction.inputsPoseidonHashes.length == 1 && transaction.outputsPoseidonHashes.length == 1) {
-            // Use existing 1-to-1 verifier for backward compatibility
-            bytes32[] memory publicInputs = new bytes32[](3);
-            publicInputs[0] = bytes32(transaction.inputsPoseidonHashes[0]);
-            publicInputs[1] = bytes32(transaction.outputsPoseidonHashes[0]);
-            publicInputs[2] = bytes32(uint256(transaction.fee));
-
-            bool isValidProof = spend11Verifier.verify(proof, publicInputs);
-            require(isValidProof, "Vault: Invalid ZK proof");
+            isValidProof = spend11Verifier.verify(proof, publicInputs);
         } else if (transaction.inputsPoseidonHashes.length == 1 && transaction.outputsPoseidonHashes.length == 2) {
-            // Use 1-to-2 verifier for 1 input to 2 outputs
-            bytes32[] memory publicInputs = new bytes32[](4);
-            publicInputs[0] = bytes32(transaction.inputsPoseidonHashes[0]);
-            publicInputs[1] = bytes32(transaction.outputsPoseidonHashes[0]);
-            publicInputs[2] = bytes32(transaction.outputsPoseidonHashes[1]);
-            publicInputs[3] = bytes32(uint256(transaction.fee));
-
-            bool isValidProof = spend12Verifier.verify(proof, publicInputs);
-            require(isValidProof, "Vault: Invalid ZK proof");
-        } else {
-            // For other multi-input/output transactions, we'll need different verifiers
-            // For now, we'll require a valid proof but the actual verification logic
-            // should be implemented when the corresponding circuit is available
-            require(proof.length > 0, "Vault: Multi-input/output proof not yet supported");
-            // TODO: Add other multi-input/output verifiers when available
+            isValidProof = spend12Verifier.verify(proof, publicInputs);
+        } else if (transaction.inputsPoseidonHashes.length == 1 && transaction.outputsPoseidonHashes.length == 3) {
+            isValidProof = spend13Verifier.verify(proof, publicInputs);
+        } else if (transaction.inputsPoseidonHashes.length == 2 && transaction.outputsPoseidonHashes.length == 1) {
+            isValidProof = spend21Verifier.verify(proof, publicInputs);
+        } else if (transaction.inputsPoseidonHashes.length == 2 && transaction.outputsPoseidonHashes.length == 2) {
+            isValidProof = spend22Verifier.verify(proof, publicInputs);
+        } else if (transaction.inputsPoseidonHashes.length == 2 && transaction.outputsPoseidonHashes.length == 3) {
+            isValidProof = spend23Verifier.verify(proof, publicInputs);
+        } else if (transaction.inputsPoseidonHashes.length == 3 && transaction.outputsPoseidonHashes.length == 1) {
+            isValidProof = spend31Verifier.verify(proof, publicInputs);
+        } else if (transaction.inputsPoseidonHashes.length == 3 && transaction.outputsPoseidonHashes.length == 2) {
+            isValidProof = spend32Verifier.verify(proof, publicInputs);
         }
+
+        require(isValidProof, "Vault: Invalid ZK proof");
 
         // Delete all input commitments from storage (saves gas)
         _deleteInputCommitments(transaction);

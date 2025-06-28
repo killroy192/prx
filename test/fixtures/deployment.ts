@@ -7,6 +7,12 @@ import {
     DepositVerifier,
     Spend11Verifier,
     Spend12Verifier,
+    Spend13Verifier,
+    Spend21Verifier,
+    Spend22Verifier,
+    Spend23Verifier,
+    Spend31Verifier,
+    Spend32Verifier,
     PoseidonWrapper,
 } from "../../typechain-types";
 import { UltraHonkBackend } from "@aztec/bb.js";
@@ -19,6 +25,12 @@ export interface DeploymentFixture {
     depositVerifier: DepositVerifier;
     spend11Verifier: Spend11Verifier;
     spend12Verifier: Spend12Verifier;
+    spend13Verifier: Spend13Verifier;
+    spend21Verifier: Spend21Verifier;
+    spend22Verifier: Spend22Verifier;
+    spend23Verifier: Spend23Verifier;
+    spend31Verifier: Spend31Verifier;
+    spend32Verifier: Spend32Verifier;
     poseidonWrapper: PoseidonWrapper;
     owner: HardhatEthersSigner;
     user1: HardhatEthersSigner;
@@ -53,6 +65,42 @@ export async function deployFixture(): Promise<DeploymentFixture> {
     );
     const spend12Verifier = await Spend12VerifierFactory.deploy();
 
+    // Deploy Spend13Verifier
+    const Spend13VerifierFactory = await ethers.getContractFactory(
+        "Spend13Verifier"
+    );
+    const spend13Verifier = await Spend13VerifierFactory.deploy();
+
+    // Deploy Spend21Verifier
+    const Spend21VerifierFactory = await ethers.getContractFactory(
+        "Spend21Verifier"
+    );
+    const spend21Verifier = await Spend21VerifierFactory.deploy();
+
+    // Deploy Spend22Verifier
+    const Spend22VerifierFactory = await ethers.getContractFactory(
+        "Spend22Verifier"
+    );
+    const spend22Verifier = await Spend22VerifierFactory.deploy();
+
+    // Deploy Spend23Verifier
+    const Spend23VerifierFactory = await ethers.getContractFactory(
+        "Spend23Verifier"
+    );
+    const spend23Verifier = await Spend23VerifierFactory.deploy();
+
+    // Deploy Spend31Verifier
+    const Spend31VerifierFactory = await ethers.getContractFactory(
+        "Spend31Verifier"
+    );
+    const spend31Verifier = await Spend31VerifierFactory.deploy();
+
+    // Deploy Spend32Verifier
+    const Spend32VerifierFactory = await ethers.getContractFactory(
+        "Spend32Verifier"
+    );
+    const spend32Verifier = await Spend32VerifierFactory.deploy();
+
     // Deploy PoseidonT3 library
     const PoseidonT3Factory = await ethers.getContractFactory("PoseidonT3");
     const poseidonT3 = await PoseidonT3Factory.deploy();
@@ -78,6 +126,12 @@ export async function deployFixture(): Promise<DeploymentFixture> {
         depositVerifier.target,
         spend11Verifier.target,
         spend12Verifier.target,
+        spend13Verifier.target,
+        spend21Verifier.target,
+        spend22Verifier.target,
+        spend23Verifier.target,
+        spend31Verifier.target,
+        spend32Verifier.target,
         poseidonWrapper.target
     );
 
@@ -92,6 +146,12 @@ export async function deployFixture(): Promise<DeploymentFixture> {
         depositVerifier,
         spend11Verifier,
         spend12Verifier,
+        spend13Verifier,
+        spend21Verifier,
+        spend22Verifier,
+        spend23Verifier,
+        spend31Verifier,
+        spend32Verifier,
         poseidonWrapper,
         owner,
         user1,

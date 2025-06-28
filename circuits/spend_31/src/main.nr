@@ -4,7 +4,7 @@ fn main(
     inputs: [Commitment; 3],
     output: Commitment,
     input_hashes: pub [Field; 3],
-    output_hash: Field,
+    output_hash: pub Field,
     fee: pub Field,
 ) {
     let mut inputs_sum: Field = 0;

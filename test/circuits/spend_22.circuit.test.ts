@@ -2,10 +2,10 @@ import { expect } from "chai";
 import { ethers } from "hardhat";
 import { UltraHonkBackend } from "@aztec/bb.js";
 import { Noir } from "@noir-lang/noir_js";
-import circuit from "../../circuits/spend_44/target/spend_44.json";
+import circuit from "../../circuits/spend_22/target/spend_22.json";
 import { computePoseidon } from "../../utils/poseidon";
 
-const cloneInList = (size: number, data: object) => {
+const cloneInList = (size: number, data: any) => {
     return Array.from({ length: size }).fill(data);
 };
 
@@ -20,7 +20,7 @@ describe("Spend 44 Circuit Integration Tests", function () {
         backend = new UltraHonkBackend(circuit.bytecode);
 
         // Deploy the verifier contract
-        const Verifier = await ethers.getContractFactory("Spend44Verifier");
+        const Verifier = await ethers.getContractFactory("Spend22Verifier");
         verifier = await Verifier.deploy();
         await verifier.waitForDeployment();
     });
@@ -37,10 +37,10 @@ describe("Spend 44 Circuit Integration Tests", function () {
 
         const start = performance.now();
         const { witness } = await noir.execute({
-            inputs: cloneInList(4, commitment),
-            input_hashes: cloneInList(4, hash),
-            outputs: cloneInList(4, commitment),
-            output_hashes: cloneInList(4, hash),
+            inputs: cloneInList(2, commitment),
+            input_hashes: cloneInList(2, hash),
+            outputs: cloneInList(2, commitment),
+            output_hashes: cloneInList(2, hash),
             fee: 0,
         });
         const { proof, publicInputs } = await backend.generateProof(witness, {
