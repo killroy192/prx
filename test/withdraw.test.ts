@@ -1,9 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { useDeploymentFixture } from "./fixtures/deployment";
-import { computePoseidon } from "../utils/poseidon";
-import { Vault } from "../typechain-types/contracts/Vault";
-import { setupDeposit, makeCommitments } from "./utils/vaultTestUtils";
+import { setupDeposit } from "./utils/vaultTestUtils";
 
 describe("Vault - Withdraw", function () {
     it("Should successfully withdraw a commitment", async function () {

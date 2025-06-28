@@ -12,7 +12,6 @@ import spend22Circuit from "../circuits/spend_22/target/spend_22.json";
 import spend23Circuit from "../circuits/spend_23/target/spend_23.json";
 import spend31Circuit from "../circuits/spend_31/target/spend_31.json";
 import spend32Circuit from "../circuits/spend_32/target/spend_32.json";
-import { Vault } from "../typechain-types/contracts/Vault";
 import {
     makeCommitments,
     setupStandardSpend,
@@ -21,7 +20,6 @@ import {
     encodeAndSignTransaction,
     createExpiredDeadline,
     createFutureDeadline,
-    generateSpendProof,
 } from "./utils/vaultTestUtils";
 
 const abi = ethers.AbiCoder.defaultAbiCoder();
@@ -32,22 +30,16 @@ describe("Vault - Spend", function () {
             await useDeploymentFixture();
 
         // Setup standard spend using utility
-        const {
-            inputCommitment,
-            outputCommitment,
-            inputHash,
-            outputHash,
-            transaction,
-            proof,
-        } = await setupStandardSpend(
-            vault,
-            mockToken,
-            user1,
-            user2,
-            noir,
-            backend,
-            spendCircuit
-        );
+        const { inputHash, outputHash, transaction, proof } =
+            await setupStandardSpend(
+                vault,
+                mockToken,
+                user1,
+                user2,
+                noir,
+                backend,
+                spendCircuit
+            );
 
         // Sign the transaction
         const signature = await encodeAndSignTransaction(transaction, user1);
@@ -78,14 +70,7 @@ describe("Vault - Spend", function () {
             await useDeploymentFixture();
 
         // Setup standard spend
-        const {
-            inputCommitment,
-            outputCommitment,
-            inputHash,
-            outputHash,
-            transaction,
-            proof,
-        } = await setupStandardSpend(
+        const { transaction, proof } = await setupStandardSpend(
             vault,
             mockToken,
             user1,
@@ -113,14 +98,7 @@ describe("Vault - Spend", function () {
             await useDeploymentFixture();
 
         // Setup standard spend
-        const {
-            inputCommitment,
-            outputCommitment,
-            inputHash,
-            outputHash,
-            transaction,
-            proof,
-        } = await setupStandardSpend(
+        const { transaction, proof } = await setupStandardSpend(
             vault,
             mockToken,
             user1,
@@ -172,14 +150,7 @@ describe("Vault - Spend", function () {
             await useDeploymentFixture();
 
         // Setup standard spend
-        const {
-            inputCommitment,
-            outputCommitment,
-            inputHash,
-            outputHash,
-            transaction,
-            proof,
-        } = await setupStandardSpend(
+        const { transaction, proof } = await setupStandardSpend(
             vault,
             mockToken,
             user1,
