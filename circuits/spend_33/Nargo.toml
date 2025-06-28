@@ -1,8 +1,0 @@
-[package]
-name = "spend_33"
-type = "bin"
-authors = ["Dzmitry Lahunouski <killroy192@gmail.com>"]
-compiler_version = ">=0.35.0"
-
-[dependencies]
-commitment = { path = '../commitment' }

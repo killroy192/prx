@@ -24,6 +24,5 @@ compile_circuit spend_13
 compile_circuit spend_21
 compile_circuit spend_22
 compile_circuit spend_23
+compile_circuit spend_31
 compile_circuit spend_32
-compile_circuit spend_33
-compile_circuit spend_44

@@ -8,6 +8,7 @@ import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/Signa
 import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import {DepositVerifier} from "./DepositVerifier.sol";
 import {Spend11Verifier} from "./Spend11Verifier.sol";
+import {Spend12Verifier} from "./Spend12Verifier.sol";
 import {PoseidonWrapper} from "./PoseidonWrapper.sol";
 
 /**
@@ -55,6 +56,9 @@ contract Vault is ReentrancyGuard, Ownable {
     // Spend11Verifier contract for ZK proof validation
     Spend11Verifier public immutable spend11Verifier;
 
+    // Spend12Verifier contract for ZK proof validation
+    Spend12Verifier public immutable spend12Verifier;
+
     // PoseidonWrapper contract for on-chain hash computation
     PoseidonWrapper public immutable poseidonWrapper;
 
@@ -64,12 +68,16 @@ contract Vault is ReentrancyGuard, Ownable {
     event CommitmentRemoved(address indexed token, uint256 indexed poseidonHash, address indexed owner);
     event TransactionSpent(address indexed token, uint256[] inputHashes, uint256[] outputHashes, uint256 fee);
 
-    constructor(address _depositVerifier, address _spend11Verifier, address _poseidonWrapper) Ownable(msg.sender) {
+    constructor(address _depositVerifier, address _spend11Verifier, address _spend12Verifier, address _poseidonWrapper)
+        Ownable(msg.sender)
+    {
         require(_depositVerifier != address(0), "Vault: Invalid deposit verifier address");
         require(_spend11Verifier != address(0), "Vault: Invalid spend verifier address");
+        require(_spend12Verifier != address(0), "Vault: Invalid spend verifier address");
         require(_poseidonWrapper != address(0), "Vault: Invalid wrapper address");
         depositVerifier = DepositVerifier(_depositVerifier);
         spend11Verifier = Spend11Verifier(_spend11Verifier);
+        spend12Verifier = Spend12Verifier(_spend12Verifier);
         poseidonWrapper = PoseidonWrapper(_poseidonWrapper);
     }
 
@@ -250,8 +258,7 @@ contract Vault is ReentrancyGuard, Ownable {
         // Verify input witnesses and signatures
         _verifyInputWitnesses(transaction);
 
-        // Verify ZK proof - for now using the same format as 1-to-1, but this should be updated
-        // when multi-input/output circuits are available
+        // Verify ZK proof - support for 1-to-1 and 1-to-2 transactions
         if (transaction.inputsPoseidonHashes.length == 1 && transaction.outputsPoseidonHashes.length == 1) {
             // Use existing 1-to-1 verifier for backward compatibility
             bytes32[] memory publicInputs = new bytes32[](3);
@@ -261,12 +268,22 @@ contract Vault is ReentrancyGuard, Ownable {
 
             bool isValidProof = spend11Verifier.verify(proof, publicInputs);
             require(isValidProof, "Vault: Invalid ZK proof");
+        } else if (transaction.inputsPoseidonHashes.length == 1 && transaction.outputsPoseidonHashes.length == 2) {
+            // Use 1-to-2 verifier for 1 input to 2 outputs
+            bytes32[] memory publicInputs = new bytes32[](4);
+            publicInputs[0] = bytes32(transaction.inputsPoseidonHashes[0]);
+            publicInputs[1] = bytes32(transaction.outputsPoseidonHashes[0]);
+            publicInputs[2] = bytes32(transaction.outputsPoseidonHashes[1]);
+            publicInputs[3] = bytes32(uint256(transaction.fee));
+
+            bool isValidProof = spend12Verifier.verify(proof, publicInputs);
+            require(isValidProof, "Vault: Invalid ZK proof");
         } else {
-            // For multi-input/output transactions, we'll need a different verifier
+            // For other multi-input/output transactions, we'll need different verifiers
             // For now, we'll require a valid proof but the actual verification logic
             // should be implemented when the corresponding circuit is available
             require(proof.length > 0, "Vault: Multi-input/output proof not yet supported");
-            // TODO: Add multi-input/output verifier when available
+            // TODO: Add other multi-input/output verifiers when available
         }
 
         // Delete all input commitments from storage (saves gas)

@@ -219,4 +219,11 @@ describe("Vault - Spend", function () {
             vault.connect(user1).spend(transaction, "0x")
         ).to.be.revertedWith("Vault: Invalid token address");
     });
+
+    it("Should have Spend12Verifier properly integrated", async function () {
+        const { vault, spend12Verifier } = await useDeploymentFixture();
+
+        // Verify that the Spend12Verifier is properly set in the Vault
+        expect(await vault.spend12Verifier()).to.equal(spend12Verifier.target);
+    });
 });

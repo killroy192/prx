@@ -6,6 +6,7 @@ import {
     MockERC20,
     DepositVerifier,
     Spend11Verifier,
+    Spend12Verifier,
     PoseidonWrapper,
 } from "../../typechain-types";
 import { UltraHonkBackend } from "@aztec/bb.js";
@@ -17,6 +18,7 @@ export interface DeploymentFixture {
     mockToken: MockERC20;
     depositVerifier: DepositVerifier;
     spend11Verifier: Spend11Verifier;
+    spend12Verifier: Spend12Verifier;
     poseidonWrapper: PoseidonWrapper;
     owner: HardhatEthersSigner;
     user1: HardhatEthersSigner;
@@ -45,6 +47,12 @@ export async function deployFixture(): Promise<DeploymentFixture> {
     );
     const spend11Verifier = await Spend11VerifierFactory.deploy();
 
+    // Deploy Spend12Verifier
+    const Spend12VerifierFactory = await ethers.getContractFactory(
+        "Spend12Verifier"
+    );
+    const spend12Verifier = await Spend12VerifierFactory.deploy();
+
     // Deploy PoseidonT3 library
     const PoseidonT3Factory = await ethers.getContractFactory("PoseidonT3");
     const poseidonT3 = await PoseidonT3Factory.deploy();
@@ -69,6 +77,7 @@ export async function deployFixture(): Promise<DeploymentFixture> {
     const vault = await VaultFactory.deploy(
         depositVerifier.target,
         spend11Verifier.target,
+        spend12Verifier.target,
         poseidonWrapper.target
     );
 
@@ -82,6 +91,7 @@ export async function deployFixture(): Promise<DeploymentFixture> {
         mockToken,
         depositVerifier,
         spend11Verifier,
+        spend12Verifier,
         poseidonWrapper,
         owner,
         user1,
