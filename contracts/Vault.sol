@@ -117,32 +117,71 @@ contract Vault is ReentrancyGuard, Ownable {
     }
 
     /**
-     * @dev Spend commitments by creating new ones (supports multiple inputs and outputs)
-     * @param transaction The transaction data
-     * @param proof ZK proof bytes
+     * @dev Validate that all input indexes are covered and unique
      */
-    function spend(Transaction calldata transaction, bytes calldata proof) external nonReentrant {
-        require(transaction.token != address(0), "Vault: Invalid token address");
-        require(transaction.deadline > block.timestamp, "Vault: Transaction expired");
-        require(transaction.fee == 0, "Vault: Fee not supported yet");
-        require(transaction.inputsPoseidonHashes.length > 0, "Vault: No inputs provided");
-        require(transaction.outputsPoseidonHashes.length > 0, "Vault: No outputs provided");
+    function _validateInputIndexes(Transaction calldata transaction) internal pure {
+        uint256 totalInputIndexes = 0;
+        for (uint256 i = 0; i < transaction.inputWitnesses.length; i++) {
+            totalInputIndexes += transaction.inputWitnesses[i].indexes.length;
+        }
+        require(totalInputIndexes == transaction.inputsPoseidonHashes.length, "Vault: Invalid input indexes coverage");
+
+        bool[] memory inputIndexesUsed = new bool[](transaction.inputsPoseidonHashes.length);
+        for (uint256 i = 0; i < transaction.inputWitnesses.length; i++) {
+            for (uint256 j = 0; j < transaction.inputWitnesses[i].indexes.length; j++) {
+                uint8 index = transaction.inputWitnesses[i].indexes[j];
+                require(index < transaction.inputsPoseidonHashes.length, "Vault: Input index out of bounds");
+                require(!inputIndexesUsed[index], "Vault: Duplicate input index");
+                inputIndexesUsed[index] = true;
+            }
+        }
+    }
+
+    /**
+     * @dev Validate that all output indexes are covered and unique
+     */
+    function _validateOutputIndexes(Transaction calldata transaction) internal pure {
+        uint256 totalOutputIndexes = 0;
+        for (uint256 i = 0; i < transaction.outputWitnesses.length; i++) {
+            totalOutputIndexes += transaction.outputWitnesses[i].indexes.length;
+        }
         require(
-            transaction.inputWitnesses.length == transaction.inputsPoseidonHashes.length,
-            "Vault: Invalid input witnesses count"
-        );
-        require(
-            transaction.outputWitnesses.length == transaction.outputsPoseidonHashes.length,
-            "Vault: Invalid output witnesses count"
+            totalOutputIndexes == transaction.outputsPoseidonHashes.length, "Vault: Invalid output indexes coverage"
         );
 
-        // Check that all input commitments exist and are owned by the signers
-        for (uint256 i = 0; i < transaction.inputsPoseidonHashes.length; i++) {
-            uint256 inputHash = transaction.inputsPoseidonHashes[i];
-            Commitment storage inputCommitment = commitmentsMap[transaction.token][inputHash];
+        bool[] memory outputIndexesUsed = new bool[](transaction.outputsPoseidonHashes.length);
+        for (uint256 i = 0; i < transaction.outputWitnesses.length; i++) {
+            for (uint256 j = 0; j < transaction.outputWitnesses[i].indexes.length; j++) {
+                uint8 index = transaction.outputWitnesses[i].indexes[j];
+                require(index < transaction.outputsPoseidonHashes.length, "Vault: Output index out of bounds");
+                require(!outputIndexesUsed[index], "Vault: Duplicate output index");
+                outputIndexesUsed[index] = true;
+            }
+        }
+    }
+
+    /**
+     * @dev Verify input witnesses and signatures
+     */
+    function _verifyInputWitnesses(Transaction calldata transaction) internal view {
+        for (uint256 i = 0; i < transaction.inputWitnesses.length; i++) {
+            InputWitnesses memory inputWitness = transaction.inputWitnesses[i];
+
+            // Get the first input hash to determine the owner
+            uint256 firstInputIndex = inputWitness.indexes[0];
+            uint256 firstInputHash = transaction.inputsPoseidonHashes[firstInputIndex];
+            Commitment storage inputCommitment = commitmentsMap[transaction.token][firstInputHash];
             require(inputCommitment.owner != address(0), "Vault: Input commitment not found");
 
-            // Verify ECDSA signature for this input
+            // Verify that all inputs in this witness belong to the same owner
+            for (uint256 j = 1; j < inputWitness.indexes.length; j++) {
+                uint256 inputIndex = inputWitness.indexes[j];
+                uint256 inputHash = transaction.inputsPoseidonHashes[inputIndex];
+                Commitment storage commitment = commitmentsMap[transaction.token][inputHash];
+                require(commitment.owner == inputCommitment.owner, "Vault: Input witness contains different owners");
+            }
+
+            // Verify ECDSA signature for this input witness
             bytes32 transactionHash = MessageHashUtils.toEthSignedMessageHash(
                 keccak256(
                     abi.encode(
@@ -157,12 +196,59 @@ contract Vault is ReentrancyGuard, Ownable {
             );
 
             require(
-                SignatureChecker.isValidSignatureNow(
-                    inputCommitment.owner, transactionHash, transaction.inputWitnesses[i].signature
-                ),
+                SignatureChecker.isValidSignatureNow(inputCommitment.owner, transactionHash, inputWitness.signature),
                 "Vault: Invalid signature"
             );
         }
+    }
+
+    /**
+     * @dev Delete input commitments and emit events
+     */
+    function _deleteInputCommitments(Transaction calldata transaction) internal {
+        for (uint256 i = 0; i < transaction.inputsPoseidonHashes.length; i++) {
+            uint256 inputHash = transaction.inputsPoseidonHashes[i];
+            address inputOwner = commitmentsMap[transaction.token][inputHash].owner;
+            delete commitmentsMap[transaction.token][inputHash];
+            emit CommitmentRemoved(transaction.token, inputHash, inputOwner);
+        }
+    }
+
+    /**
+     * @dev Create output commitments using indexes from output witnesses
+     */
+    function _createOutputCommitments(Transaction calldata transaction) internal {
+        for (uint256 i = 0; i < transaction.outputWitnesses.length; i++) {
+            OutputsParams memory outputWitness = transaction.outputWitnesses[i];
+            address outputOwner = outputWitness.owner;
+
+            for (uint256 j = 0; j < outputWitness.indexes.length; j++) {
+                uint8 outputIndex = outputWitness.indexes[j];
+                uint256 outputHash = transaction.outputsPoseidonHashes[outputIndex];
+                commitmentsMap[transaction.token][outputHash] = Commitment({owner: outputOwner, spent: false});
+                emit CommitmentCreated(transaction.token, outputHash, outputOwner);
+            }
+        }
+    }
+
+    /**
+     * @dev Spend commitments by creating new ones (supports multiple inputs and outputs)
+     * @param transaction The transaction data
+     * @param proof ZK proof bytes
+     */
+    function spend(Transaction calldata transaction, bytes calldata proof) external nonReentrant {
+        require(transaction.token != address(0), "Vault: Invalid token address");
+        require(transaction.deadline > block.timestamp, "Vault: Transaction expired");
+        require(transaction.fee == 0, "Vault: Fee not supported yet");
+        require(transaction.inputsPoseidonHashes.length > 0, "Vault: No inputs provided");
+        require(transaction.outputsPoseidonHashes.length > 0, "Vault: No outputs provided");
+
+        // Validate indexes using separate methods to reduce stack size
+        _validateInputIndexes(transaction);
+        _validateOutputIndexes(transaction);
+
+        // Verify input witnesses and signatures
+        _verifyInputWitnesses(transaction);
 
         // Verify ZK proof - for now using the same format as 1-to-1, but this should be updated
         // when multi-input/output circuits are available
@@ -184,20 +270,10 @@ contract Vault is ReentrancyGuard, Ownable {
         }
 
         // Delete all input commitments from storage (saves gas)
-        for (uint256 i = 0; i < transaction.inputsPoseidonHashes.length; i++) {
-            uint256 inputHash = transaction.inputsPoseidonHashes[i];
-            address inputOwner = commitmentsMap[transaction.token][inputHash].owner;
-            delete commitmentsMap[transaction.token][inputHash];
-            emit CommitmentRemoved(transaction.token, inputHash, inputOwner);
-        }
+        _deleteInputCommitments(transaction);
 
-        // Create new output commitments
-        for (uint256 i = 0; i < transaction.outputsPoseidonHashes.length; i++) {
-            uint256 outputHash = transaction.outputsPoseidonHashes[i];
-            address outputOwner = transaction.outputWitnesses[i].owner;
-            commitmentsMap[transaction.token][outputHash] = Commitment({owner: outputOwner, spent: false});
-            emit CommitmentCreated(transaction.token, outputHash, outputOwner);
-        }
+        // Create new output commitments using the indexes from output witnesses
+        _createOutputCommitments(transaction);
 
         // Emit single transaction event for the atomic operation
         emit TransactionSpent(
