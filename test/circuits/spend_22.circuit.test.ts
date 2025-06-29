@@ -9,7 +9,7 @@ const cloneInList = (size: number, data: any) => {
     return Array.from({ length: size }).fill(data);
 };
 
-describe("Spend 44 Circuit Integration Tests", function () {
+describe("Spend 22 Circuit Integration Tests", function () {
     let verifier: any;
     let noir: Noir;
     let backend: UltraHonkBackend;
@@ -50,7 +50,7 @@ describe("Spend 44 Circuit Integration Tests", function () {
             { proof, publicInputs },
             {
                 keccak: true,
-            }
+            },
         );
         expect(isValidLocal).to.be.true;
 
